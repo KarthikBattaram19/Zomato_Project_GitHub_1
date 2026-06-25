@@ -1,0 +1,911 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Zomato AI Recommender</title>
+  <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet" />
+  <script id="tailwind-config">
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#b7122a",
+            "on-primary": "#ffffff",
+            "primary-container": "#db313f",
+            "on-primary-container": "#fffbff",
+            "surface": "#fcf9f8",
+            "surface-bright": "#fcf9f8",
+            "surface-dim": "#dcd9d9",
+            "surface-container-lowest": "#ffffff",
+            "surface-container-low": "#f6f3f2",
+            "surface-container": "#f0eded",
+            "surface-container-high": "#eae7e7",
+            "surface-container-highest": "#e5e2e1",
+            "surface-tint": "#bb162c",
+            "surface-variant": "#e5e2e1",
+            "on-surface": "#1b1b1b",
+            "on-surface-variant": "#5b403f",
+            "outline": "#8f6f6e",
+            "outline-variant": "#e4bebc",
+            "secondary": "#006c48",
+            "secondary-container": "#7cf7bc",
+            "on-secondary-container": "#00714b",
+            "tertiary": "#805200",
+            "inverse-surface": "#313030",
+            "inverse-on-surface": "#f3f0ef",
+            "error": "#ba1a1a",
+            "error-container": "#ffdad6",
+          },
+          boxShadow: {
+            'resting': '0 4px 6px -1px rgba(0,0,0,0.04), 0 2px 4px -1px rgba(0,0,0,0.02)',
+            'raised':  '0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px -2px rgba(0,0,0,0.04)',
+          },
+          fontFamily: { sans: ['Inter', 'sans-serif'] },
+        }
+      }
+    }
+  </script>
+  <style>
+    body { font-family: 'Inter', sans-serif; background: #FAFAFA; }
+
+    /* Dark mode overrides */
+    .dark body { background: #1b1b1b; }
+    .dark .dark-bg  { background: #1e1e1e; }
+
+    /* Stagger animation */
+    .stagger-item {
+      opacity: 0;
+      transform: translateY(20px);
+      animation: fadeUp 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+    }
+    .stagger-item:nth-child(1) { animation-delay: 0.08s; }
+    .stagger-item:nth-child(2) { animation-delay: 0.18s; }
+    .stagger-item:nth-child(3) { animation-delay: 0.28s; }
+    .stagger-item:nth-child(4) { animation-delay: 0.38s; }
+    .stagger-item:nth-child(5) { animation-delay: 0.48s; }
+    @keyframes fadeUp { to { opacity:1; transform:translateY(0); } }
+
+    /* Badge hover rotate */
+    .badge-hover-container:hover .badge-rotate { transform: rotate(5deg) scale(1.08); }
+    .badge-rotate { transition: transform 0.3s ease; }
+
+    /* Skeleton shimmer */
+    @keyframes shimmer {
+      0%   { background-position: -600px 0; }
+      100% { background-position:  600px 0; }
+    }
+    .skeleton {
+      background: linear-gradient(90deg, #ececec 25%, #f8f8f8 50%, #ececec 75%);
+      background-size: 600px 100%;
+      animation: shimmer 1.4s infinite linear;
+      border-radius: 6px;
+    }
+    .dark .skeleton {
+      background: linear-gradient(90deg, #2a2a2a 25%, #333 50%, #2a2a2a 75%);
+      background-size: 600px 100%;
+    }
+
+    /* Custom dropdowns (location + cuisine) */
+    .loc-dropdown, .cui-dropdown { max-height: 220px; overflow-y: auto; }
+    .loc-dropdown::-webkit-scrollbar,
+    .cui-dropdown::-webkit-scrollbar { width: 5px; }
+    .loc-dropdown::-webkit-scrollbar-thumb,
+    .cui-dropdown::-webkit-scrollbar-thumb { background: #e4bebc; border-radius: 9999px; }
+
+    /* Selected cuisine tags row inside button */
+    .cui-tag { display:inline-flex; align-items:center; gap:3px; padding:1px 7px; background:rgba(183,18,42,0.1); color:#b7122a; border-radius:9999px; font-size:11px; font-weight:500; white-space:nowrap; }
+    .cui-tag-x { cursor:pointer; line-height:1; font-size:13px; opacity:0.7; }
+    .cui-tag-x:hover { opacity:1; }
+
+    /* Rating slider */
+    input[type=range] { -webkit-appearance: none; appearance: none; height: 6px; border-radius: 9999px; outline: none; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #b7122a; cursor: pointer; box-shadow: 0 2px 6px rgba(183,18,42,0.3); transition: transform 0.15s; }
+    input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.15); }
+
+    /* Mobile sidebar */
+    #sidebar { transition: transform 0.3s ease; }
+
+    /* Scrollbar for sidebar */
+    #sidebar::-webkit-scrollbar { width: 4px; }
+    #sidebar::-webkit-scrollbar-thumb { background: #e4bebc; border-radius: 9999px; }
+
+    /* Favorite button animation */
+    .fav-btn.liked .material-symbols-outlined { font-variation-settings: 'FILL' 1; color: #b7122a; }
+
+    /* Dark mode input */
+    .dark input, .dark textarea, .dark select { background: #2a2626; border-color: #5b403f; color: #f3f0ef; }
+    .dark input::placeholder, .dark textarea::placeholder { color: #8f6f6e; }
+
+    /* Smooth transitions */
+    * { transition-property: background-color, border-color, color, box-shadow; transition-duration: 200ms; }
+    .no-transition * { transition: none !important; }
+  </style>
+</head>
+<body class="text-on-surface min-h-screen">
+
+<!-- ═══════════════════ TOP NAV ═══════════════════ -->
+<nav id="topnav" class="fixed top-0 left-0 w-full z-50 flex items-center justify-between px-6 md:px-8 bg-surface dark:bg-inverse-surface border-b border-outline-variant dark:border-outline h-16 shadow-resting">
+  <div class="flex items-center gap-3">
+    <!-- SVG Logo -->
+    <svg width="36" height="36" viewBox="0 0 40 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect width="40" height="40" rx="8" fill="#E23744"/>
+      <path d="M12 10V18C12 20.2091 13.7909 22 16 22H18V28C18 29.1046 18.8954 30 20 30C21.1046 30 22 29.1046 22 28V22H24C26.2091 22 28 20.2091 28 18V10" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M16 10V16" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M20 10V16" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M24 10V16" stroke="white" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M30 8L31.5 11L34.5 12.5L31.5 14L30 17L28.5 14L25.5 12.5L28.5 11L30 8Z" fill="#FFD700"/>
+    </svg>
+    <span class="text-xl font-bold text-primary dark:text-red-300">Zomato AI</span>
+    <span class="hidden sm:inline text-xs font-medium text-on-surface-variant dark:text-gray-400 border border-outline-variant px-2 py-0.5 rounded-full">Powered by Llama 3 × Groq</span>
+  </div>
+  <div class="flex items-center gap-2 md:gap-6">
+    <a href="#" class="hidden md:block text-sm text-on-surface-variant dark:text-gray-300 hover:text-primary transition-colors">How it works</a>
+    <a href="https://github.com" target="_blank" class="hidden md:flex items-center gap-1 text-sm text-on-surface-variant dark:text-gray-300 hover:text-primary transition-colors">
+      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.477 2 2 6.477 2 12c0 4.418 2.865 8.166 6.839 9.489.5.092.682-.217.682-.482 0-.237-.008-.866-.013-1.7-2.782.603-3.369-1.342-3.369-1.342-.454-1.155-1.11-1.463-1.11-1.463-.908-.62.069-.608.069-.608 1.003.07 1.531 1.031 1.531 1.031.892 1.529 2.341 1.087 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.11-4.555-4.943 0-1.091.39-1.984 1.029-2.683-.103-.253-.446-1.27.098-2.647 0 0 .84-.269 2.75 1.025A9.578 9.578 0 0112 6.836c.85.004 1.705.114 2.504.336 1.909-1.294 2.747-1.025 2.747-1.025.546 1.377.202 2.394.1 2.647.64.699 1.028 1.592 1.028 2.683 0 3.842-2.339 4.687-4.566 4.935.359.309.678.919.678 1.852 0 1.336-.012 2.415-.012 2.741 0 .267.18.578.688.48C19.138 20.161 22 16.416 22 12c0-5.523-4.477-10-10-10z"/></svg>
+      GitHub
+    </a>
+    <!-- Mobile filter toggle -->
+    <button id="mobileFilterBtn" class="md:hidden w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface-variant text-on-surface-variant">
+      <span class="material-symbols-outlined text-[20px]">tune</span>
+    </button>
+    <!-- Dark mode toggle -->
+    <button id="darkToggle" class="w-9 h-9 flex items-center justify-center rounded-full hover:bg-surface-variant dark:hover:bg-surface-container text-on-surface-variant">
+      <span class="material-symbols-outlined text-[20px]" id="darkIcon">dark_mode</span>
+    </button>
+  </div>
+</nav>
+
+<!-- ═══════════════════ LAYOUT WRAPPER ═══════════════════ -->
+<div class="flex pt-16 min-h-screen">
+
+  <!-- ═══════════════════ SIDEBAR ═══════════════════ -->
+  <aside id="sidebar" class="fixed left-0 top-16 bottom-0 w-[320px] flex flex-col overflow-y-auto
+    bg-surface-bright dark:bg-inverse-surface border-r border-outline-variant dark:border-outline
+    z-40 -translate-x-full md:translate-x-0 shadow-raised md:shadow-none">
+
+    <!-- Sidebar header -->
+    <div class="px-5 pt-6 pb-4 border-b border-outline-variant dark:border-outline">
+      <div class="flex items-center gap-3 mb-1">
+        <div class="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+          <span class="material-symbols-outlined text-primary text-[22px]">robot_2</span>
+        </div>
+        <div>
+          <h2 class="text-base font-semibold text-on-surface dark:text-inverse-on-surface">Find Your Perfect Restaurant</h2>
+          <p class="text-xs text-on-surface-variant">AI-Powered Discovery</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Form controls -->
+    <div class="flex flex-col gap-5 px-5 py-5 flex-1">
+
+      <!-- ── LOCATION DROPDOWN ── -->
+      <div>
+        <label class="block text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1.5">
+          <span class="material-symbols-outlined text-[14px] align-middle mr-1">location_on</span>Location
+        </label>
+        <div class="relative" id="locContainer">
+          <button type="button" id="locBtn"
+            class="w-full flex items-center justify-between px-3 py-2.5 rounded-xl border border-outline-variant dark:border-outline
+                   bg-white dark:bg-surface-container text-sm text-on-surface dark:text-inverse-on-surface
+                   hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors">
+            <span id="locBtnText" class="text-on-surface-variant">Select a location…</span>
+            <span class="material-symbols-outlined text-[18px] text-on-surface-variant transition-transform" id="locChevron">expand_more</span>
+          </button>
+          <!-- Dropdown panel -->
+          <div id="locPanel"
+            class="absolute z-50 mt-1 w-full bg-white dark:bg-surface-container rounded-xl border border-outline-variant shadow-raised hidden">
+            <div class="p-2 border-b border-outline-variant">
+              <input id="locSearch" type="text" placeholder="Search location…"
+                class="w-full px-3 py-1.5 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white dark:bg-surface-container-high text-on-surface"/>
+            </div>
+            <div class="loc-dropdown py-1" id="locList">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── BUDGET SEGMENTED ── -->
+      <div>
+        <label class="block text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1.5">
+          <span class="material-symbols-outlined text-[14px] align-middle mr-1">payments</span>Budget
+        </label>
+        <div class="flex rounded-xl border border-outline-variant overflow-hidden text-sm font-medium" id="budgetGroup">
+          <button data-val="low"    class="budget-btn flex-1 py-2.5 text-center hover:bg-surface-container transition-colors border-r border-outline-variant text-on-surface-variant">
+            <span class="block text-xs">Low</span><span class="text-[10px] opacity-70">≤ ₹500</span>
+          </button>
+          <button data-val="medium" class="budget-btn flex-1 py-2.5 text-center hover:bg-surface-container transition-colors border-r border-outline-variant bg-on-surface text-white">
+            <span class="block text-xs">Medium</span><span class="text-[10px] opacity-70">₹500–₹1500</span>
+          </button>
+          <button data-val="high"   class="budget-btn flex-1 py-2.5 text-center hover:bg-surface-container transition-colors text-on-surface-variant">
+            <span class="block text-xs">High</span><span class="text-[10px] opacity-70">₹1500+</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- ── CUISINE MULTI-SELECT DROPDOWN ── -->
+      <div>
+        <label class="block text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1.5">
+          <span class="material-symbols-outlined text-[14px] align-middle mr-1">restaurant</span>Cuisine
+          <span class="normal-case font-normal text-on-surface-variant ml-1">(pick any)</span>
+        </label>
+        <div class="relative" id="cuiContainer">
+          <!-- Trigger button -->
+          <button type="button" id="cuiBtn"
+            class="w-full min-h-[42px] flex items-center justify-between gap-2 px-3 py-2 rounded-xl border border-outline-variant
+                   bg-white dark:bg-surface-container text-sm text-on-surface dark:text-inverse-on-surface
+                   hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 transition-colors">
+            <div id="cuiBtnContent" class="flex flex-wrap gap-1 flex-1 text-left">
+              <span id="cuiPlaceholder" class="text-on-surface-variant text-sm">Select cuisines…</span>
+            </div>
+            <span class="material-symbols-outlined text-[18px] text-on-surface-variant flex-shrink-0 transition-transform" id="cuiChevron">expand_more</span>
+          </button>
+          <!-- Dropdown panel -->
+          <div id="cuiPanel"
+            class="absolute z-50 mt-1 w-full bg-white dark:bg-surface-container rounded-xl border border-outline-variant shadow-raised hidden">
+            <!-- Search -->
+            <div class="p-2 border-b border-outline-variant flex items-center gap-2">
+              <input id="cuiSearch" type="text" placeholder="Search cuisine…"
+                class="flex-1 px-3 py-1.5 rounded-lg border border-outline-variant text-sm focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white dark:bg-surface-container-high text-on-surface"/>
+              <button type="button" id="cuiClearAll" class="text-xs text-primary hover:underline whitespace-nowrap hidden">Clear all</button>
+            </div>
+            <!-- List -->
+            <div class="cui-dropdown py-1" id="cuiList">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── MINIMUM RATING SLIDER ── -->
+      <div>
+        <label class="block text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-3">
+          <span class="material-symbols-outlined text-[14px] align-middle mr-1">star</span>Minimum Rating
+        </label>
+        <div class="relative px-1">
+          <div class="relative mb-1">
+            <span id="ratingBadge"
+              class="absolute -top-7 bg-primary text-white text-xs font-bold px-2 py-0.5 rounded-full shadow transform -translate-x-1/2 whitespace-nowrap pointer-events-none transition-all"
+              style="left: 70%">3.5 ★</span>
+          </div>
+          <input type="range" id="ratingSlider" min="0" max="5" step="0.5" value="3.5"
+            class="w-full cursor-pointer"
+            style="background: linear-gradient(to right, #b7122a 70%, #e5e2e1 70%);" />
+          <div class="flex justify-between text-[10px] text-on-surface-variant mt-1">
+            <span>0</span><span>1</span><span>2</span><span>3</span><span>4</span><span>5</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ── ADDITIONAL PREFERENCES ── -->
+      <div>
+        <label class="block text-xs font-semibold text-on-surface-variant uppercase tracking-wide mb-1.5">
+          <span class="material-symbols-outlined text-[14px] align-middle mr-1">edit_note</span>Special Requests
+        </label>
+        <textarea id="additionalPrefs" rows="3"
+          placeholder="e.g. family-friendly, outdoor seating, quick service, vegan options…"
+          class="w-full px-3 py-2.5 rounded-xl border border-outline-variant dark:border-outline
+                 bg-white dark:bg-surface-container text-sm text-on-surface dark:text-inverse-on-surface
+                 placeholder-on-surface-variant focus:outline-none focus:ring-2 focus:ring-primary/30 resize-none"></textarea>
+      </div>
+    </div>
+
+    <!-- CTA Button -->
+    <div class="px-5 pb-6 pt-2 border-t border-outline-variant">
+      <button id="findBtn"
+        class="w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-primary text-white
+               text-sm font-semibold hover:bg-primary-container active:scale-95
+               disabled:opacity-60 disabled:cursor-not-allowed transition-all shadow-sm">
+        <span class="material-symbols-outlined text-[18px]" id="findBtnIcon">search</span>
+        <span id="findBtnText">Find Restaurants</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- Mobile sidebar backdrop -->
+  <div id="sidebarBackdrop" class="fixed inset-0 bg-black/40 z-30 hidden md:hidden" onclick="closeSidebar()"></div>
+
+  <!-- ═══════════════════ MAIN CONTENT ═══════════════════ -->
+  <main class="flex-1 ml-0 md:ml-[320px] px-4 md:px-8 py-6 min-h-screen bg-[#FAFAFA] dark:bg-[#1a1a1a]">
+
+    <!-- ── RESULTS HEADER (active filter chips) ── -->
+    <div id="resultsHeader" class="hidden flex-col sm:flex-row sm:items-center justify-between mb-6 gap-3">
+      <h1 class="text-2xl md:text-3xl font-bold text-on-surface dark:text-inverse-on-surface flex items-center gap-2">
+        <span>✨</span> Top Recommendations
+      </h1>
+      <div class="flex flex-wrap gap-2" id="activeFilterChips"></div>
+    </div>
+
+    <!-- ─────────────── STATE: WELCOME ─────────────── -->
+    <div id="stateWelcome" class="flex flex-col items-center justify-center min-h-[60vh] text-center px-4">
+      <div class="w-24 h-24 mb-6 rounded-full bg-primary/10 flex items-center justify-center">
+        <span class="material-symbols-outlined text-primary text-[48px]">restaurant_menu</span>
+      </div>
+      <h2 class="text-2xl font-bold text-on-surface dark:text-inverse-on-surface mb-2">Tell us what you're craving</h2>
+      <p class="text-sm text-on-surface-variant max-w-sm leading-relaxed">
+        Set your preferences in the sidebar and let our AI find the perfect dining experience for you — complete with personalized explanations.
+      </p>
+      <div class="mt-8 flex flex-wrap justify-center gap-2 text-xs text-on-surface-variant">
+        <span class="flex items-center gap-1 px-3 py-1.5 bg-surface-container rounded-full">
+          <span class="material-symbols-outlined text-[14px]">location_on</span> 92 Locations
+        </span>
+        <span class="flex items-center gap-1 px-3 py-1.5 bg-surface-container rounded-full">
+          <span class="material-symbols-outlined text-[14px]">restaurant</span> 50+ Cuisines
+        </span>
+        <span class="flex items-center gap-1 px-3 py-1.5 bg-surface-container rounded-full">
+          <span class="material-symbols-outlined text-[14px]">auto_awesome</span> Llama 3 Powered
+        </span>
+      </div>
+    </div>
+
+    <!-- ─────────────── STATE: LOADING ─────────────── -->
+    <div id="stateLoading" class="hidden">
+      <div class="flex items-center gap-2 mb-6 px-4 py-2.5 bg-primary/8 border border-primary/20 rounded-full w-fit text-sm text-primary font-medium">
+        <span class="material-symbols-outlined text-[18px] animate-spin">autorenew</span>
+        AI is analysing restaurants for you…
+      </div>
+      <div class="flex flex-col gap-4 max-w-3xl">
+        <!-- Skeleton cards -->
+        <div class="bg-white dark:bg-surface-container rounded-xl p-4 shadow-resting">
+          <div class="flex gap-4">
+            <div class="skeleton w-40 h-28 flex-shrink-0 rounded-lg"></div>
+            <div class="flex-1 flex flex-col gap-2 pt-1">
+              <div class="skeleton h-5 w-3/4 rounded"></div>
+              <div class="skeleton h-3 w-1/3 rounded"></div>
+              <div class="skeleton h-3 w-1/2 rounded"></div>
+              <div class="skeleton h-12 w-full rounded mt-auto"></div>
+            </div>
+          </div>
+        </div>
+        <div class="bg-white dark:bg-surface-container rounded-xl p-4 shadow-resting">
+          <div class="flex gap-4">
+            <div class="skeleton w-40 h-28 flex-shrink-0 rounded-lg"></div>
+            <div class="flex-1 flex flex-col gap-2 pt-1">
+              <div class="skeleton h-5 w-2/3 rounded"></div>
+              <div class="skeleton h-3 w-1/4 rounded"></div>
+              <div class="skeleton h-3 w-2/5 rounded"></div>
+              <div class="skeleton h-12 w-full rounded mt-auto"></div>
+            </div>
+          </div>
+        </div>
+        <div class="bg-white dark:bg-surface-container rounded-xl p-4 shadow-resting">
+          <div class="flex gap-4">
+            <div class="skeleton w-40 h-28 flex-shrink-0 rounded-lg"></div>
+            <div class="flex-1 flex flex-col gap-2 pt-1">
+              <div class="skeleton h-5 w-4/5 rounded"></div>
+              <div class="skeleton h-3 w-1/3 rounded"></div>
+              <div class="skeleton h-3 w-1/2 rounded"></div>
+              <div class="skeleton h-12 w-full rounded mt-auto"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─────────────── STATE: RESULTS ─────────────── -->
+    <div id="stateResults" class="hidden flex flex-col gap-4 max-w-3xl" id="resultsList"></div>
+
+    <!-- ─────────────── STATE: NO RESULTS ─────────────── -->
+    <div id="stateNoResults" class="hidden flex flex-col items-center justify-center min-h-[50vh] text-center px-4">
+      <div class="w-20 h-20 mb-4 rounded-full bg-surface-container-highest flex items-center justify-center">
+        <span class="material-symbols-outlined text-on-surface-variant text-[40px]">no_meals</span>
+      </div>
+      <h2 class="text-xl font-bold text-on-surface dark:text-inverse-on-surface mb-2">No exact matches found</h2>
+      <p class="text-sm text-on-surface-variant max-w-xs leading-relaxed mb-5">
+        We couldn't find restaurants matching all your filters. Try broadening your search.
+      </p>
+      <button onclick="resetFilters()" class="px-5 py-2.5 rounded-xl bg-primary text-white text-sm font-semibold hover:bg-primary-container transition-colors">
+        Try Broader Search
+      </button>
+    </div>
+
+    <!-- ─────────────── STATE: ERROR ─────────────── -->
+    <div id="stateError" class="hidden">
+      <div class="flex items-start gap-3 p-4 bg-error-container border border-error/30 rounded-xl mb-5 max-w-3xl">
+        <span class="material-symbols-outlined text-error text-[22px] flex-shrink-0 mt-0.5">warning</span>
+        <div>
+          <p class="text-sm font-semibold text-error">Couldn't reach the AI engine</p>
+          <p class="text-xs text-on-surface-variant mt-0.5">Showing raw filtered results below. Check your API key or try again.</p>
+        </div>
+      </div>
+      <div id="fallbackTable" class="bg-white dark:bg-surface-container rounded-xl shadow-resting overflow-hidden max-w-3xl">
+        <table class="w-full text-sm">
+          <thead class="bg-surface-container-high dark:bg-surface-container text-on-surface-variant">
+            <tr>
+              <th class="text-left px-4 py-3 font-semibold">Restaurant</th>
+              <th class="text-left px-4 py-3 font-semibold hidden sm:table-cell">Cuisine</th>
+              <th class="text-left px-4 py-3 font-semibold">Rating</th>
+              <th class="text-left px-4 py-3 font-semibold hidden sm:table-cell">Cost for 2</th>
+            </tr>
+          </thead>
+          <tbody id="fallbackTableBody" class="divide-y divide-outline-variant"></tbody>
+        </table>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<!-- ═══════════════════ JAVASCRIPT ═══════════════════ -->
+<script>
+// ────────────────────────────────────────────────────
+// DATA
+// ────────────────────────────────────────────────────
+const LOCATIONS = [
+  'BTM','Banashankari','Banaswadi','Bannerghatta Road','Basavanagudi',
+  'Basaveshwara Nagar','Bellandur','Bommanahalli','Brigade Road','Brookefield',
+  'CV Raman Nagar','Central Bangalore','Church Street','City Market',
+  'Commercial Street','Cunningham Road','Domlur','East Bangalore','Ejipura',
+  'Electronic City','Frazer Town','HBR Layout','HSR','Hebbal','Hennur',
+  'Hosur Road','ITPL Main Road, Whitefield','Indiranagar','Infantry Road',
+  'JP Nagar','Jalahalli','Jayanagar','Jeevan Bhima Nagar','KR Puram',
+  'Kaggadasapura','Kalyan Nagar','Kammanahalli','Kanakapura Road','Kengeri',
+  'Koramangala','Koramangala 1st Block','Koramangala 2nd Block',
+  'Koramangala 3rd Block','Koramangala 4th Block','Koramangala 5th Block',
+  'Koramangala 6th Block','Koramangala 7th Block','Koramangala 8th Block',
+  'Kumaraswamy Layout','Langford Town','Lavelle Road','MG Road','Magadi Road',
+  'Majestic','Malleshwaram','Marathahalli','Mysore Road','Nagarbhavi',
+  'Nagawara','New BEL Road','North Bangalore','Old Airport Road',
+  'Old Madras Road','Peenya','RT Nagar','Race Course Road','Rajajinagar',
+  'Rajarajeshwari Nagar','Rammurthy Nagar','Residency Road','Richmond Road',
+  'Sadashiv Nagar','Sahakara Nagar','Sanjay Nagar','Sankey Road',
+  'Sarjapur Road','Seshadripuram','Shanti Nagar','Shivajinagar',
+  'South Bangalore','St. Marks Road','Thippasandra','Ulsoor','Uttarahalli',
+  'Varthur Main Road, Whitefield','Vasanth Nagar','Vijay Nagar',
+  'West Bangalore','Whitefield','Wilson Garden','Yelahanka','Yeshwantpur'
+];
+
+const CUISINES = [
+  'North Indian','South Indian','Chinese','Italian','Continental',
+  'Fast Food','Cafe','Biryani','Mughlai','Thai','Japanese','Mexican',
+  'American','Desserts','Pizza','Burger','Bakery','Beverages','Seafood','BBQ'
+];
+
+// Sample restaurant data for demo
+const DEMO_RESTAURANTS = [
+  {
+    name: 'The Pasta House', cuisine: ['Italian','Cafe'], rating: 4.8,
+    cost: 1200, area: 'Koramangala',
+    img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuD4HaRQDjJMXoAZ5tRyxP7noFZEnqd6yis1Kp8PqToBbwO7r7dxRnGNtlMGilEvTWTbjA8VUxgGY88uWEXNnFe_NGQIImsPoyi7Yl3H0OwaaATFxDsl4FvJIw6h8Xieu40JBL-1Z-8vztT7Q_4gcDZTaURk4Uh7dySBRTaxCB3c1cShnQIrKsiioGuEZWRIEseji8YkqVDo95IILi0bd8InYlUynKPkxKDabijjguJ1F3FdUp-WSJZ5',
+    explanation: 'This highly-rated Italian spot fits your medium budget perfectly. Known for authentic wood-fired pizzas and a cozy family ambiance — a consistent crowd favourite.'
+  },
+  {
+    name: 'Tuscany Trails', cuisine: ['Italian','Desserts'], rating: 4.5,
+    cost: 1400, area: 'Indiranagar',
+    img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDDEj6W7kYpl18bq2k_xXB2vcU4DMP3orXgjpFU9yDxhuAmRHo3m4TTJggDEaNgcd3sPco0-spe7j5kuMF91UnPKXlbD6I-Laay7gpg8xdp7bTWsditWwQ7AtZd8STi1dvjsPMpOw7R1ilwPf83ocdsIyyGbN9UFwVa5EcgBMkMVzWRvkEefW_atkWvsatqNoRYHLUopDolZ3RTwXGzsEcSKNzStYAjECyiO-44gU_MOiyDHWhJJaYt',
+    explanation: 'Excellent tiramisu and handmade pastas. Hits your criteria for budget and cuisine with consistently great reviews from regulars and first-timers alike.'
+  },
+  {
+    name: 'Roma Trattoria', cuisine: ['Italian'], rating: 4.2,
+    cost: 900, area: 'Jayanagar',
+    img: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBWWcHXCThoOWD2af9-COyLN2aDow5a7K0rVxlMnlIgGTrmrje1EF5mxUVSK6XN8Ex59-C9Q8LfTp09GUiE3-LDOxYkY6oBSV67nk3fOzmcYyOaIJgq7LlKAOI0ihD2wOV8Q7tpPg7l78jOwLybiR-K1fo_4-kpsQykdK-M6dfQa0U2tKqmrBFP9kbzJ77EVQGsPM6nYZV95wvBh8R1BefIUDHhLAYMSkBHtSuDqnBKyNhAjsDm3VS3',
+    explanation: 'A hidden gem that offers great value. Their arrabbiata is highly praised by reviewers looking for authentic flavours without breaking the bank.'
+  },
+  {
+    name: 'Bella Napoli', cuisine: ['Italian','Pizza'], rating: 4.4,
+    cost: 1100, area: 'MG Road',
+    img: 'https://images.unsplash.com/photo-1555396273-367ea4eb4db5?w=400&h=200&fit=crop',
+    explanation: 'Beloved for their thin-crust Neapolitan pizzas and vibrant atmosphere. Perfect for a casual dinner with friends — lively, affordable, and reliably delicious.'
+  },
+  {
+    name: 'Cucina Allegra', cuisine: ['Italian','Continental'], rating: 4.1,
+    cost: 850, area: 'BTM',
+    img: 'https://images.unsplash.com/photo-1414235077428-338989a2e8c0?w=400&h=200&fit=crop',
+    explanation: 'Great neighbourhood restaurant offering generous portions at wallet-friendly prices. Their risotto earns special praise and the service is consistently warm.'
+  }
+];
+
+// ────────────────────────────────────────────────────
+// STATE
+// ────────────────────────────────────────────────────
+let state = {
+  location: null,
+  budget: 'medium',
+  cuisines: [],
+  rating: 3.5,
+  additional: ''
+};
+
+// ────────────────────────────────────────────────────
+// LOCATION DROPDOWN
+// ────────────────────────────────────────────────────
+function buildLocList(filter = '') {
+  const listEl = document.getElementById('locList');
+  const q = filter.toLowerCase();
+  const filtered = LOCATIONS.filter(l => l.toLowerCase().includes(q));
+  listEl.innerHTML = filtered.length
+    ? filtered.map(l =>
+        `<button type="button" data-loc="${l}"
+          onclick="selectLocation('${l.replace(/'/g,"\\'")}') "
+          class="w-full text-left px-4 py-2 text-sm hover:bg-surface-container-low dark:hover:bg-surface-container
+                 text-on-surface dark:text-inverse-on-surface transition-colors ${state.location===l ? 'bg-primary/10 text-primary font-medium' : ''}"
+        >${l}</button>`
+      ).join('')
+    : '<p class="px-4 py-3 text-xs text-on-surface-variant">No locations found</p>';
+}
+
+function selectLocation(loc) {
+  state.location = loc;
+  document.getElementById('locBtnText').textContent = loc;
+  document.getElementById('locBtnText').classList.remove('text-on-surface-variant');
+  document.getElementById('locBtnText').classList.add('text-on-surface','font-medium');
+  closeLocPanel();
+}
+
+function closeLocPanel() {
+  document.getElementById('locPanel').classList.add('hidden');
+  document.getElementById('locChevron').style.transform = '';
+}
+
+document.getElementById('locBtn').addEventListener('click', (e) => {
+  e.stopPropagation();
+  const panel = document.getElementById('locPanel');
+  const chevron = document.getElementById('locChevron');
+  const isOpen = !panel.classList.contains('hidden');
+  if (isOpen) {
+    closeLocPanel();
+  } else {
+    panel.classList.remove('hidden');
+    chevron.style.transform = 'rotate(180deg)';
+    buildLocList();
+    document.getElementById('locSearch').focus();
+  }
+});
+
+document.getElementById('locSearch').addEventListener('input', e => buildLocList(e.target.value));
+
+document.addEventListener('click', e => {
+  if (!document.getElementById('locContainer').contains(e.target)) closeLocPanel();
+});
+
+// ────────────────────────────────────────────────────
+// BUDGET SEGMENTED BUTTONS
+// ────────────────────────────────────────────────────
+document.querySelectorAll('.budget-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    state.budget = btn.dataset.val;
+    document.querySelectorAll('.budget-btn').forEach(b => {
+      const active = b.dataset.val === state.budget;
+      b.classList.toggle('bg-on-surface', active);
+      b.classList.toggle('text-white', active);
+      b.classList.toggle('text-on-surface-variant', !active);
+    });
+  });
+});
+
+// ────────────────────────────────────────────────────
+// CUISINE MULTI-SELECT DROPDOWN
+// ────────────────────────────────────────────────────
+function buildCuiList(filter = '') {
+  const listEl = document.getElementById('cuiList');
+  const q = filter.toLowerCase();
+  const filtered = CUISINES.filter(c => c.toLowerCase().includes(q));
+  listEl.innerHTML = filtered.length
+    ? filtered.map(c => {
+        const checked = state.cuisines.includes(c);
+        return `<label class="flex items-center gap-3 px-4 py-2 cursor-pointer
+                  hover:bg-surface-container-low dark:hover:bg-surface-container
+                  text-sm text-on-surface dark:text-inverse-on-surface transition-colors
+                  ${checked ? 'bg-primary/5' : ''}">
+          <span class="w-4 h-4 flex-shrink-0 rounded border-2 flex items-center justify-center transition-all
+            ${checked ? 'bg-primary border-primary' : 'border-outline-variant'}">
+            ${checked ? '<span class="material-symbols-outlined text-white text-[11px]" style="font-variation-settings:\'FILL\' 1">check</span>' : ''}
+          </span>
+          <span onclick="toggleCuisine('${c.replace(/'/g,"\\'")}');event.stopPropagation()" class="flex-1">${c}</span>
+        </label>`;
+      }).join('')
+    : '<p class="px-4 py-3 text-xs text-on-surface-variant">No cuisines found</p>';
+}
+
+function toggleCuisine(c) {
+  const idx = state.cuisines.indexOf(c);
+  if (idx > -1) state.cuisines.splice(idx, 1);
+  else state.cuisines.push(c);
+  buildCuiList(document.getElementById('cuiSearch').value);
+  renderCuiButton();
+}
+
+function renderCuiButton() {
+  const content    = document.getElementById('cuiBtnContent');
+  const placeholder = document.getElementById('cuiPlaceholder');
+  const clearBtn   = document.getElementById('cuiClearAll');
+
+  if (state.cuisines.length === 0) {
+    content.innerHTML = '<span id="cuiPlaceholder" class="text-on-surface-variant text-sm">Select cuisines…</span>';
+    clearBtn.classList.add('hidden');
+  } else {
+    const tags = state.cuisines.map(c =>
+      `<span class="cui-tag">${c}<span class="cui-tag-x" onclick="toggleCuisine('${c.replace(/'/g,"\\'")}');event.stopPropagation()">×</span></span>`
+    ).join('');
+    content.innerHTML = tags;
+    clearBtn.classList.remove('hidden');
+  }
+}
+
+function closeCuiPanel() {
+  document.getElementById('cuiPanel').classList.add('hidden');
+  document.getElementById('cuiChevron').style.transform = '';
+}
+
+document.getElementById('cuiBtn').addEventListener('click', e => {
+  e.stopPropagation();
+  // If click was on a tag ×, don't open
+  if (e.target.classList.contains('cui-tag-x')) return;
+  const panel   = document.getElementById('cuiPanel');
+  const chevron = document.getElementById('cuiChevron');
+  const isOpen  = !panel.classList.contains('hidden');
+  if (isOpen) { closeCuiPanel(); }
+  else {
+    panel.classList.remove('hidden');
+    chevron.style.transform = 'rotate(180deg)';
+    buildCuiList();
+    document.getElementById('cuiSearch').focus();
+  }
+});
+
+document.getElementById('cuiSearch').addEventListener('input', e => buildCuiList(e.target.value));
+
+document.getElementById('cuiClearAll').addEventListener('click', e => {
+  e.stopPropagation();
+  state.cuisines = [];
+  buildCuiList(document.getElementById('cuiSearch').value);
+  renderCuiButton();
+});
+
+document.addEventListener('click', e => {
+  if (!document.getElementById('cuiContainer').contains(e.target)) closeCuiPanel();
+});
+
+// ────────────────────────────────────────────────────
+// RATING SLIDER
+// ────────────────────────────────────────────────────
+const slider = document.getElementById('ratingSlider');
+const badge  = document.getElementById('ratingBadge');
+
+function updateSlider() {
+  const val = parseFloat(slider.value);
+  state.rating = val;
+  const pct = (val / 5) * 100;
+  slider.style.background = `linear-gradient(to right, #b7122a ${pct}%, #e5e2e1 ${pct}%)`;
+  badge.style.left = `${pct}%`;
+  badge.textContent = `${val} ★`;
+}
+
+slider.addEventListener('input', updateSlider);
+updateSlider();
+
+// ────────────────────────────────────────────────────
+// ADDITIONAL PREFS
+// ────────────────────────────────────────────────────
+document.getElementById('additionalPrefs').addEventListener('input', e => {
+  state.additional = e.target.value;
+});
+
+// ────────────────────────────────────────────────────
+// SHOW STATE
+// ────────────────────────────────────────────────────
+function showState(name) {
+  ['stateWelcome','stateLoading','stateResults','stateNoResults','stateError'].forEach(id => {
+    document.getElementById(id).classList.add('hidden');
+    document.getElementById(id).classList.remove('flex');
+  });
+  const el = document.getElementById(name);
+  el.classList.remove('hidden');
+  if (['stateWelcome','stateNoResults','stateError'].includes(name)) el.classList.add('flex');
+
+  const header = document.getElementById('resultsHeader');
+  if (name === 'stateResults') header.classList.replace('hidden','flex');
+  else header.classList.replace('flex','hidden');
+}
+
+// ────────────────────────────────────────────────────
+// ACTIVE FILTER CHIPS
+// ────────────────────────────────────────────────────
+function renderFilterChips() {
+  const container = document.getElementById('activeFilterChips');
+  container.innerHTML = '';
+  const chips = [];
+  if (state.location) chips.push({ label: state.location, key: 'location' });
+  if (state.budget)   chips.push({ label: state.budget.charAt(0).toUpperCase() + state.budget.slice(1) + ' Budget', key: 'budget' });
+  state.cuisines.forEach(c => chips.push({ label: c, key: 'cuisine_'+c }));
+  chips.push({ label: `≥ ${state.rating}★`, key: 'rating' });
+
+  chips.forEach(ch => {
+    const div = document.createElement('div');
+    div.className = 'inline-flex items-center gap-1 px-3 py-1.5 rounded-full border border-primary bg-primary/10 text-primary text-xs font-medium';
+    div.innerHTML = `${ch.label}<button class="flex items-center ml-1 hover:opacity-70" onclick="removeFilter('${ch.key}')">
+      <span class="material-symbols-outlined text-[12px]">close</span></button>`;
+    container.appendChild(div);
+  });
+}
+
+function removeFilter(key) {
+  if (key === 'location') { state.location = null; document.getElementById('locBtnText').textContent = 'Select a location…'; document.getElementById('locBtnText').className = 'text-on-surface-variant'; }
+  else if (key === 'budget') { state.budget = null; document.querySelectorAll('.budget-btn').forEach(b => { b.classList.remove('bg-on-surface','text-white'); b.classList.add('text-on-surface-variant'); }); }
+  else if (key.startsWith('cuisine_')) {
+    const c = key.replace('cuisine_','');
+    state.cuisines = state.cuisines.filter(x => x !== c);
+    buildCuiList();
+    renderCuiButton();
+  }
+  renderFilterChips();
+  runSearch();
+}
+
+// ────────────────────────────────────────────────────
+// RATING COLOR HELPER
+// ────────────────────────────────────────────────────
+function ratingColor(r) {
+  if (r >= 4.0) return 'text-[#1BA672] bg-[#1BA672]/10';
+  if (r >= 3.0) return 'text-[#F5A623] bg-[#F5A623]/10';
+  return 'text-error bg-error-container';
+}
+
+// ────────────────────────────────────────────────────
+// RENDER RESULT CARDS
+// ────────────────────────────────────────────────────
+function renderResults(restaurants) {
+  const container = document.getElementById('stateResults');
+  container.innerHTML = '';
+  restaurants.forEach((r, i) => {
+    const div = document.createElement('div');
+    div.className = 'stagger-item bg-white dark:bg-surface-container rounded-xl p-4 shadow-resting hover:shadow-raised transition-all duration-300 hover:-translate-y-0.5 badge-hover-container relative';
+    div.innerHTML = `
+      <div class="absolute -top-3 -left-3 w-8 h-8 bg-primary rounded-full flex items-center justify-center text-white font-bold text-xs shadow-md badge-rotate">${i+1}</div>
+      <div class="flex flex-col sm:flex-row gap-4 ml-2 sm:ml-3">
+        <div class="w-full sm:w-44 h-28 rounded-xl bg-surface-variant flex-shrink-0 overflow-hidden">
+          <img src="${r.img}" alt="${r.name}" class="w-full h-full object-cover rounded-xl"
+            onerror="this.style.display='none';this.parentElement.innerHTML='<div class=\'w-full h-full flex items-center justify-center\'><span class=\'material-symbols-outlined text-on-surface-variant text-[36px]\'>restaurant</span></div>'"/>
+        </div>
+        <div class="flex-1 flex flex-col">
+          <div class="flex justify-between items-start mb-2">
+            <div>
+              <h3 class="text-lg font-semibold text-on-surface dark:text-inverse-on-surface mb-1">${r.name}</h3>
+              <div class="flex flex-wrap gap-1.5">
+                ${r.cuisine.map(c => `<span class="px-2 py-0.5 rounded-md bg-primary/8 text-primary text-[11px] font-medium">${c}</span>`).join('')}
+              </div>
+            </div>
+            <button class="fav-btn w-9 h-9 rounded-full bg-surface hover:bg-surface-variant border border-outline-variant flex items-center justify-center text-on-surface-variant transition-colors flex-shrink-0"
+              onclick="this.classList.toggle('liked');this.querySelector('.material-symbols-outlined').style.fontVariationSettings=this.classList.contains('liked') ? \\'FILL\\' 1 : \\'FILL\\' 0">
+              <span class="material-symbols-outlined text-[18px]">favorite</span>
+            </button>
+          </div>
+          <div class="flex flex-wrap items-center gap-3 mb-3 text-sm text-on-surface-variant">
+            <div class="flex items-center gap-1 font-semibold px-2 py-0.5 rounded ${ratingColor(r.rating)}">
+              <span class="material-symbols-outlined text-[14px]" style="font-variation-settings:'FILL' 1">star</span>${r.rating}
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="material-symbols-outlined text-[14px]">payments</span>₹${r.cost.toLocaleString('en-IN')} for two
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="material-symbols-outlined text-[14px]">location_on</span>${r.area}
+            </div>
+          </div>
+          <div class="mt-auto bg-[#FFF8F0] border-l-4 border-primary px-3 py-2.5 rounded-r-xl">
+            <p class="text-sm italic text-on-surface-variant flex gap-2">
+              <span class="material-symbols-outlined text-primary text-[18px] flex-shrink-0 mt-0.5">auto_awesome</span>
+              "${r.explanation}"
+            </p>
+          </div>
+        </div>
+      </div>`;
+    container.appendChild(div);
+  });
+}
+
+// ────────────────────────────────────────────────────
+// SEARCH LOGIC (SIMULATED)
+// ────────────────────────────────────────────────────
+function runSearch() {
+  if (!state.location) {
+    alert('Please select a location first.');
+    return;
+  }
+
+  // Disable button, show loading
+  const btn = document.getElementById('findBtn');
+  const icon = document.getElementById('findBtnIcon');
+  const text = document.getElementById('findBtnText');
+  btn.disabled = true;
+  icon.textContent = 'autorenew';
+  icon.classList.add('animate-spin');
+  text.textContent = 'Finding best matches…';
+  showState('stateLoading');
+  closeSidebar();
+
+  // Simulate API call (1.8s)
+  setTimeout(() => {
+    btn.disabled = false;
+    icon.classList.remove('animate-spin');
+    icon.textContent = 'search';
+    text.textContent = 'Find Restaurants';
+
+    // Filter demo data (simulate)
+    let results = DEMO_RESTAURANTS.filter(r => r.rating >= state.rating);
+    if (state.cuisines.length > 0) {
+      results = results.filter(r => r.cuisine.some(c => state.cuisines.includes(c)));
+    }
+
+    renderFilterChips();
+
+    if (results.length === 0) {
+      showState('stateNoResults');
+    } else {
+      renderResults(results);
+      showState('stateResults');
+    }
+  }, 1800);
+}
+
+document.getElementById('findBtn').addEventListener('click', runSearch);
+
+// ────────────────────────────────────────────────────
+// RESET FILTERS
+// ────────────────────────────────────────────────────
+function resetFilters() {
+  state.location = null;
+  state.budget = 'medium';
+  state.cuisines = [];
+  state.rating = 3.5;
+  state.additional = '';
+  document.getElementById('locBtnText').textContent = 'Select a location…';
+  document.getElementById('locBtnText').className = 'text-on-surface-variant';
+  document.querySelectorAll('.budget-btn').forEach(b => {
+    const active = b.dataset.val === 'medium';
+    b.classList.toggle('bg-on-surface', active);
+    b.classList.toggle('text-white', active);
+    b.classList.toggle('text-on-surface-variant', !active);
+  });
+  buildCuiList();
+  renderCuiButton();
+  slider.value = 3.5;
+  updateSlider();
+  document.getElementById('additionalPrefs').value = '';
+  showState('stateWelcome');
+}
+
+// ────────────────────────────────────────────────────
+// DARK MODE TOGGLE
+// ────────────────────────────────────────────────────
+const darkToggle = document.getElementById('darkToggle');
+const darkIcon   = document.getElementById('darkIcon');
+let isDark = false;
+
+darkToggle.addEventListener('click', () => {
+  isDark = !isDark;
+  document.documentElement.classList.toggle('dark', isDark);
+  darkIcon.textContent = isDark ? 'light_mode' : 'dark_mode';
+});
+
+// ────────────────────────────────────────────────────
+// MOBILE SIDEBAR
+// ────────────────────────────────────────────────────
+const sidebar  = document.getElementById('sidebar');
+const backdrop = document.getElementById('sidebarBackdrop');
+
+document.getElementById('mobileFilterBtn').addEventListener('click', () => {
+  sidebar.classList.remove('-translate-x-full');
+  backdrop.classList.remove('hidden');
+});
+
+function closeSidebar() {
+  if (window.innerWidth < 768) {
+    sidebar.classList.add('-translate-x-full');
+    backdrop.classList.add('hidden');
+  }
+}
+
+// ────────────────────────────────────────────────────
+// INIT
+// ────────────────────────────────────────────────────
+buildLocList();
+buildCuiList();
+showState('stateWelcome');
+</script>
+</body>
+</html>
