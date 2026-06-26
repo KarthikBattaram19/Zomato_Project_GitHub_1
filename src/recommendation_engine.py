@@ -38,7 +38,7 @@ def get_recommendations(prompt: str, system_prompt: str) -> str:
                     {"role": "user", "content": prompt},
                 ],
                 model="llama-3.3-70b-versatile",
-                temperature=0.7,
+                temperature=0.3,
                 max_tokens=2048,
             )
             content = chat_completion.choices[0].message.content
@@ -60,37 +60,65 @@ def get_recommendations(prompt: str, system_prompt: str) -> str:
 
     return ""
 
+# Patterns that indicate a block is LLM preamble/reasoning rather than a restaurant entry
+_PREAMBLE_PATTERNS = re.compile(
+    r'^(#+\s|step\s*\d|here\s+are|based\s+on|filter|the\s+following|below\s+are|sure[,!]|of\s+course'
+    r'|no\s+other|unfortunately|only\s+one|note\s*:|please\s+note|there\s+(are|is)\s+(no|only))',
+    re.IGNORECASE,
+)
+
+# Patterns to strip from the tail of an explanation when the LLM adds closing remarks
+_EXPLANATION_TAIL_PATTERNS = re.compile(
+    r'\s*(No other recommendations?\s+(?:are|is)\s+available[^.]*\.|'
+    r'Unfortunately[^.]*only\s+one[^.]*\.|'
+    r'Note[:\s]+[^.]*only[^.]*\.|'
+    r'Please note[^.]*\.|'
+    r'Only\s+\d+\s+restaurant[^.]*\.|'
+    r'There (?:are|is) (?:no|only)[^.]*\.)\s*$',
+    re.IGNORECASE,
+)
+
 def parse_recommendations(llm_output: str) -> List[Dict[str, Any]]:
     """
-    Parse LLM text output into a structured list of dictionaries.
+    Parse LLM text output into a structured list of restaurant dictionaries.
+    Skips any preamble, markdown headers, or reasoning blocks the LLM may emit
+    before the numbered list.
     """
     recommendations = []
-    
+
     if not llm_output:
         return recommendations
-        
-    # Split the output by numbered list items (e.g., "1. ", "2.", "1)")
+
+    # Split on numbered list markers: "1. ", "2.", "3) ", etc.
     blocks = re.split(r'\n\s*\d+[\.\)]\s*', '\n' + llm_output)
-    
+
     for block in blocks:
         block = block.strip()
         if not block:
             continue
-            
+
         lines = block.split('\n')
-        
-        # The first line is typically the restaurant name
-        name_line = lines[0].strip().replace('**', '')
-        
+        name_line = lines[0].strip().replace('**', '').strip('#').strip()
+
+        # Skip blocks that are clearly preamble / reasoning, not restaurant names
+        if not name_line:
+            continue
+        if _PREAMBLE_PATTERNS.match(name_line):
+            logger.debug(f"Skipping preamble block: {name_line[:60]!r}")
+            continue
+        # A restaurant name should not be very long or contain colons mid-line
+        if len(name_line) > 120 or name_line.count(':') > 1:
+            continue
+
         cuisine = ""
         rating = ""
         cost = ""
         explanation = ""
-        
+
         for line in lines[1:]:
             line_clean = line.replace('**', '').strip()
             line_lower = line_clean.lower()
-            
+
             if line_lower.startswith("cuisine") and ":" in line_clean:
                 cuisine = line_clean.split(":", 1)[-1].strip()
             elif line_lower.startswith("rating") and ":" in line_clean:
@@ -100,20 +128,21 @@ def parse_recommendations(llm_output: str) -> List[Dict[str, Any]]:
             elif (line_lower.startswith("explanation") or line_lower.startswith("why")) and ":" in line_clean:
                 explanation = line_clean.split(":", 1)[-1].strip()
             else:
-                # If we found an explanation field previously, append extra text to it
                 if explanation and line_clean:
                     explanation += " " + line_clean
                 elif not (cuisine or rating or cost) and line_clean:
-                    # Collect stray text into explanation if no structured fields are found
                     explanation += " " + line_clean
 
-        if name_line and len(name_line) < 150 and (cuisine or rating or cost or explanation):
+        # Only accept blocks that have at least a name plus one structured field
+        if name_line and (cuisine or rating or cost):
+            # Strip any trailing "no other recommendations" boilerplate the LLM may append
+            clean_explanation = _EXPLANATION_TAIL_PATTERNS.sub("", explanation).strip()
             recommendations.append({
                 "restaurant_name": name_line,
                 "cuisine": cuisine,
                 "rating": rating,
                 "cost_for_two": cost,
-                "explanation": explanation.strip()
+                "explanation": clean_explanation,
             })
-            
+
     return recommendations

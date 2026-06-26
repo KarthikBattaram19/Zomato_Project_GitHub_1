@@ -85,7 +85,7 @@ class RecommendRequest(BaseModel):
     cuisine: str | None = Field(None, description="Cuisine type, e.g. 'North Indian'")
     min_rating: float = Field(0.0, ge=0.0, le=5.0, description="Minimum acceptable rating")
     additional_preferences: str = Field("", description="Free-text user notes")
-    top_n: int = Field(10, ge=1, le=50, description="Candidate pool size fed to the LLM")
+    top_n: int = Field(15, ge=1, le=50, description="Candidate pool size fed to the LLM")
 
 
 class Recommendation(BaseModel):
@@ -94,6 +94,7 @@ class Recommendation(BaseModel):
     cuisine: str
     rating: str
     cost_for_two: str
+    budget_tier: str
     explanation: str
 
 
@@ -110,6 +111,7 @@ class RecommendResponse(BaseModel):
     status: str  # "ok" | "no_results" | "missing_key" | "llm_error"
     recommendations: list[Recommendation] = []
     fallback: list[FallbackRow] | None = None
+    filters_relaxed: list[str] = []  # filters that were dropped, e.g. ["budget", "cuisine"]
 
 
 # ---------------------------------------------------------------------------
@@ -153,7 +155,7 @@ def recommend(req: RecommendRequest) -> RecommendResponse:
         return RecommendResponse(status="missing_key")
 
     # Filter candidates
-    filtered = filter_restaurants(
+    filtered, filters_relaxed = filter_restaurants(
         _df,
         location=req.location,
         budget=req.budget,
@@ -161,6 +163,9 @@ def recommend(req: RecommendRequest) -> RecommendResponse:
         min_rating=req.min_rating,
         top_n=req.top_n,
     )
+
+    if filters_relaxed:
+        logger.info(f"Filters relaxed: {filters_relaxed}")
 
     # 5A.7 — Build fallback rows from whatever the filter returned
     def _to_fallback(df: pd.DataFrame) -> list[FallbackRow]:
@@ -201,25 +206,41 @@ def recommend(req: RecommendRequest) -> RecommendResponse:
     except Exception as exc:
         # Rate-limit retries exhausted or network error
         logger.error(f"LLM call failed: {exc}")
-        return RecommendResponse(status="llm_error", fallback=fallback_rows)
+        return RecommendResponse(status="llm_error", fallback=fallback_rows, filters_relaxed=filters_relaxed)
 
     # Parse structured output
     parsed = parse_recommendations(raw_output)
 
     if not parsed:
         logger.warning("LLM returned output that could not be parsed.")
-        return RecommendResponse(status="llm_error", fallback=fallback_rows)
+        return RecommendResponse(status="llm_error", fallback=fallback_rows, filters_relaxed=filters_relaxed)
 
-    recommendations = [
-        Recommendation(
-            rank=i + 1,
-            restaurant_name=item.get("restaurant_name", ""),
-            cuisine=item.get("cuisine", ""),
-            rating=str(item.get("rating", "")),
-            cost_for_two=str(item.get("cost_for_two", "")),
-            explanation=item.get("explanation", ""),
+    rows_by_name = {
+        str(row.get("restaurant_name", "")).strip().casefold(): row
+        for row in filtered.to_dict(orient="records")
+    }
+
+    recommendations: list[Recommendation] = []
+    for item in parsed:
+        row = rows_by_name.get(str(item.get("restaurant_name", "")).strip().casefold())
+        if row is None:
+            logger.warning(f"Skipping LLM recommendation outside filtered results: {item.get('restaurant_name', '')}")
+            continue
+
+        recommendations.append(
+            Recommendation(
+                rank=len(recommendations) + 1,
+                restaurant_name=str(row.get("restaurant_name", "")),
+                cuisine=str(row.get("cuisines", "")),
+                rating=f"{float(row.get('rating', 0)):.1f}",
+                cost_for_two=f"{float(row.get('cost_for_two', 0)):,.0f}",
+                budget_tier=str(row.get("budget_tier", "")),
+                explanation=item.get("explanation", ""),
+            )
         )
-        for i, item in enumerate(parsed)
-    ]
 
-    return RecommendResponse(status="ok", recommendations=recommendations)
+    if not recommendations:
+        logger.warning("LLM returned recommendations that were not in the filtered dataset.")
+        return RecommendResponse(status="llm_error", fallback=fallback_rows, filters_relaxed=filters_relaxed)
+
+    return RecommendResponse(status="ok", recommendations=recommendations, filters_relaxed=filters_relaxed)

@@ -46,6 +46,7 @@ export default function HomePage() {
   const [appStatus,        setAppStatus]        = useState<AppStatus>('welcome')
   const [recommendations,  setRecommendations]  = useState<Recommendation[]>([])
   const [fallback,         setFallback]         = useState<FallbackRow[] | null>(null)
+  const [filtersRelaxed,   setFiltersRelaxed]   = useState<string[]>([])
   const [activeFilters,    setActiveFilters]    = useState<UserPreferences | null>(null)
 
   // Mobile sidebar
@@ -79,10 +80,11 @@ export default function HomePage() {
         cuisine:                prefs.cuisines.length > 0 ? prefs.cuisines.join(', ') : null,
         min_rating:             prefs.minRating,
         additional_preferences: prefs.additionalPreferences,
-        top_n:                  10,
+        top_n:                  15,
       })
 
       setFallback(res.fallback ?? null)
+      setFiltersRelaxed(res.filters_relaxed ?? [])
 
       if (res.status === 'ok') {
         setRecommendations(res.recommendations)
@@ -102,6 +104,7 @@ export default function HomePage() {
     setAppStatus('welcome')
     setRecommendations([])
     setFallback(null)
+    setFiltersRelaxed([])
     setActiveFilters(null)
   }
 
@@ -195,6 +198,7 @@ export default function HomePage() {
             status={appStatus}
             recommendations={recommendations}
             fallback={fallback}
+            filtersRelaxed={filtersRelaxed}
             onReset={handleReset}
           />
         </main>

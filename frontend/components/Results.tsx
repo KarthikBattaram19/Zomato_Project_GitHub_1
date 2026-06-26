@@ -7,6 +7,7 @@ interface Props {
   status: AppStatus
   recommendations: Recommendation[]
   fallback: FallbackRow[] | null
+  filtersRelaxed: string[]
   onReset: () => void
 }
 
@@ -28,7 +29,7 @@ function SkeletonCard() {
 }
 
 /* ─── Main component ─────────────────────────────────────────── */
-export default function Results({ status, recommendations, fallback, onReset }: Props) {
+export default function Results({ status, recommendations, fallback, filtersRelaxed, onReset }: Props) {
 
   /* Welcome */
   if (status === 'welcome') {

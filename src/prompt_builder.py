@@ -7,9 +7,26 @@ into a structured LLM prompt for the recommendation engine.
 
 import pandas as pd
 
-SYSTEM_PROMPT = """You are a friendly and knowledgeable restaurant recommendation assistant.
-Given a list of restaurants and a user's preferences, rank the top
-recommendations and explain why each one is a great fit."""
+SYSTEM_PROMPT = """You are a helpful restaurant recommendation assistant.
+
+OUTPUT FORMAT — you must follow this exactly:
+- Output ONLY a numbered list. If the table has 5 or more rows, output the top 5. If it has fewer, output all of them.
+- Do NOT write any preamble, introduction, steps, headers, reasoning, or summary before or after the list.
+- Do NOT add any closing remark, note, or sentence about limited results, availability, or how many restaurants matched.
+- Start your response immediately with "1." — the very first character of your response must be the digit 1.
+- End your response immediately after the last Explanation line. Do not add anything after it.
+- Use this exact multi-line format for each entry:
+
+1. Restaurant Name
+Cuisine: <value>
+Rating: <value>
+Cost for Two: <value>
+Explanation: <one sentence why it fits>
+
+STRICT DATA RULES:
+- Only recommend restaurants that appear in the provided table. Never invent restaurants.
+- If the user specified a budget, only recommend restaurants whose Budget Tier column matches that budget exactly. Do not include restaurants from a different budget tier.
+- Copy Restaurant Name, Cuisine, Rating, and Cost for Two exactly as they appear in the table."""
 
 def _format_restaurant_table(df: pd.DataFrame) -> str:
     """Format candidate restaurants as a readable markdown table inside the prompt."""
@@ -36,24 +53,19 @@ def build_prompt(
     Convert user preferences + filtered DataFrame into a structured user prompt.
     """
     formatted_restaurant_table = _format_restaurant_table(df)
-    
-    prompt = f"""## User Preferences
+    candidate_count = len(df) if df is not None else 0
+    target_count = min(5, candidate_count)
+
+    prompt = f"""User Preferences:
 - Location: {location if location else 'Any'}
 - Budget: {budget if budget else 'Any'}
 - Cuisine preference: {cuisine if cuisine else 'Any'}
 - Minimum rating: {min_rating}
 - Additional notes: {additional_preferences if additional_preferences else 'None'}
 
-## Available Restaurants
+Available Restaurants ({candidate_count} candidates):
 {formatted_restaurant_table}
 
-## Instructions
-1. Rank the top 5 restaurants that best match.
-2. For each recommendation, strictly use the following multi-line format:
-[Rank]. [Name]
-Cuisine: [Cuisine]
-Rating: [Rating]
-Cost for Two: [Cost]
-Explanation: [Explanation]
+Pick the {target_count} best matches and respond with ONLY the numbered list. Do not add any text before "1." or after the last entry.
 """
     return prompt

@@ -20,6 +20,7 @@ export interface Recommendation {
   cuisine: string
   rating: string
   cost_for_two: string
+  budget_tier: string
   explanation: string
 }
 
@@ -36,6 +37,7 @@ export interface RecommendResponse {
   status: 'ok' | 'no_results' | 'missing_key' | 'llm_error'
   recommendations: Recommendation[]
   fallback: FallbackRow[] | null
+  filters_relaxed: string[]  // filters that were dropped, e.g. ["budget", "cuisine"]
 }
 
 // Front-end-specific types
