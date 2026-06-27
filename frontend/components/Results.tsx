@@ -1,7 +1,7 @@
 // 5B.6 / 5B.8 / 5B.9 — All result states: welcome, loading, results, no_results, llm_error, missing_key
 
 import type { AppStatus, FallbackRow, Recommendation } from '@/lib/types'
-import RestaurantCard from './RestaurantCard'
+import RestaurantCard, { buildRestaurantImageUrls } from './RestaurantCard'
 
 interface Props {
   status: AppStatus
@@ -165,10 +165,11 @@ export default function Results({ status, recommendations, fallback, filtersRela
   }
 
   /* Results */
+  const imageUrls = buildRestaurantImageUrls(recommendations.map(r => r.restaurant_name))
   return (
     <div className="flex flex-col gap-4 max-w-3xl">
       {recommendations.map((rec, i) => (
-        <RestaurantCard key={rec.rank} rec={rec} index={i} />
+        <RestaurantCard key={rec.rank} rec={rec} index={i} imageUrl={imageUrls[i]} />
       ))}
     </div>
   )

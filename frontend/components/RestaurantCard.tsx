@@ -5,7 +5,7 @@
 import { useState } from 'react'
 import type { Recommendation } from '@/lib/types'
 
-/* ─── Restaurant → stable ambiance image ────────────────────── */
+/* ─── Restaurant → ambiance image ───────────────────────────── */
 const UNSPLASH_PARAMS = 'auto=format&fit=crop&w=480&h=320&q=80'
 const RESTAURANT_IMAGE_IDS = [
   'photo-1517248135467-4c7edcad34c4',
@@ -16,17 +16,43 @@ const RESTAURANT_IMAGE_IDS = [
   'photo-1521017432531-fbd92d768814',
   'photo-1414235077428-338989a2e8c0',
   'photo-1551218808-94e220e084d2',
+  'photo-1466978913421-dad2ebd01d17',
+  'photo-1504674900247-0877df9cc836',
+  'photo-1424847651672-bf20a4b0982b',
+  'photo-1540189549336-e6e99c3679fe',
+  'photo-1467003909585-2f8a72700288',
+  'photo-1432139509613-5c4255815697',
+  'photo-1428515613728-6b4607e44363',
+  'photo-1485921325833-c519f76c4927',
+  'photo-1481833761820-0509d3217039',
+  'photo-1473093295043-cdd812d0e601',
+  'photo-1546069901-ba9599a7e63c',
+  'photo-1565299624946-b28f40a0ae38',
 ]
 
 function buildUnsplashImageUrl(photoId: string): string {
   return `https://images.unsplash.com/${photoId}?${UNSPLASH_PARAMS}`
 }
 
-function getRestaurantImageUrl(restaurantName: string): string {
-  const hash = restaurantName
-    .split('')
-    .reduce((total, char) => total + char.charCodeAt(0), 0)
-  return buildUnsplashImageUrl(RESTAURANT_IMAGE_IDS[hash % RESTAURANT_IMAGE_IDS.length])
+/**
+ * Assign a distinct image to every restaurant in a result set.
+ *
+ * Selecting purely by a name hash caused different restaurants to collide on
+ * the same picture. Assigning by consecutive position guarantees uniqueness as
+ * long as the list is no larger than the image pool, while a per-list seed
+ * (derived from the names) keeps the same rank from always showing the same
+ * image across different searches.
+ */
+export function buildRestaurantImageUrls(restaurantNames: string[]): string[] {
+  const pool = RESTAURANT_IMAGE_IDS.length
+  const seed = restaurantNames.reduce(
+    (total, name) =>
+      total + name.split('').reduce((sum, char) => sum + char.charCodeAt(0), 0),
+    0,
+  )
+  return restaurantNames.map((_, index) =>
+    buildUnsplashImageUrl(RESTAURANT_IMAGE_IDS[(seed + index) % pool]),
+  )
 }
 
 /* ─── Rating colour helper ───────────────────────────────────── */
@@ -40,12 +66,13 @@ function ratingColorClass(r: number): string {
 interface Props {
   rec: Recommendation
   index: number
+  imageUrl: string
 }
 
-export default function RestaurantCard({ rec, index }: Props) {
+export default function RestaurantCard({ rec, index, imageUrl }: Props) {
   const ratingNum  = parseFloat(rec.rating) || 0
   const cuisines   = rec.cuisine.split(',').map(c => c.trim()).filter(Boolean)
-  const imgUrl     = getRestaurantImageUrl(rec.restaurant_name)
+  const imgUrl     = imageUrl
 
   const [imgLoaded, setImgLoaded] = useState(false)
   const [imgError,  setImgError]  = useState(false)
