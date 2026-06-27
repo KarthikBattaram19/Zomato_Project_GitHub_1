@@ -9,7 +9,11 @@ function getBaseUrl(): string {
   const configuredUrl = process.env.NEXT_PUBLIC_API_URL?.trim()
 
   if (configuredUrl) {
-    return configuredUrl.replace(/\/+$/, '')
+    // Strip trailing slashes and ensure an absolute scheme. Without a scheme
+    // (e.g. "my-api.railway.app") fetch treats the value as a relative path
+    // and the request fails with "Failed to fetch".
+    const trimmed = configuredUrl.replace(/\/+$/, '')
+    return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`
   }
 
   if (process.env.NODE_ENV === 'development') {

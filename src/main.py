@@ -110,11 +110,24 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-_frontend_origin = os.getenv("FRONTEND_ORIGIN", "http://localhost:3000")
+# Build the CORS allow-list. FRONTEND_ORIGIN may be a single origin or a
+# comma-separated list (e.g. "https://app.vercel.app,https://www.myapp.com").
+# Local dev origins are always allowed, and any Vercel deployment URL is matched
+# via regex so production + preview deployments work without reconfiguring.
+_default_dev_origins = ["http://localhost:3000", "http://127.0.0.1:3000"]
+_configured_origins = [
+    origin.strip().rstrip("/")
+    for origin in os.getenv("FRONTEND_ORIGIN", "").split(",")
+    if origin.strip()
+]
+_allowed_origins = list(dict.fromkeys(_configured_origins + _default_dev_origins))
+
+logger.info(f"CORS allow-list: {_allowed_origins} (+ regex https://*.vercel.app)")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[_frontend_origin, "http://localhost:3000"],
+    allow_origins=_allowed_origins,
+    allow_origin_regex=r"https://([a-z0-9-]+\.)*vercel\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
