@@ -8,13 +8,30 @@ from Hugging Face as a standardized pandas DataFrame.
 import os
 import logging
 import pandas as pd
-from datasets import load_dataset
+from huggingface_hub import hf_hub_download
 from src.utils import assign_budget_tier
 
 logger = logging.getLogger(__name__)
 
 CACHE_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data")
 CACHE_FILE = os.path.join(CACHE_DIR, "zomato_cached.csv")
+DATASET_REPO_ID = "ManikaSaini/zomato-restaurant-recommendation"
+DATASET_FILENAME = "zomato.csv"
+RAW_COLUMNS = [
+    "name",
+    "location",
+    "cuisines",
+    "approx_cost(for two people)",
+    "rate",
+]
+COLUMN_MAPPING = {
+    "name": "restaurant_name",
+    "location": "location",
+    "cuisines": "cuisines",
+    "approx_cost(for two people)": "cost_for_two",
+    "rate": "rating",
+}
+CHUNK_SIZE = int(os.getenv("ZOMATO_CSV_CHUNK_SIZE", "5000"))
 
 def _clean_cost(cost_str: str) -> float:
     """Helper to clean and convert cost to float."""
@@ -51,6 +68,35 @@ def _normalize_cuisines(cuisine_str) -> str:
     normalized = ", ".join(filter(None, parts))
     return normalized if normalized else ""
 
+
+def _hf_token() -> str | None:
+    token = os.getenv("HF_TOKEN", "").strip()
+    if not token or token.startswith("your_"):
+        return None
+    return token
+
+
+def _download_raw_data() -> pd.DataFrame:
+    """Download only the columns needed by the API from the Hugging Face CSV."""
+    logger.info("Downloading dataset CSV from Hugging Face Hub...")
+    os.makedirs(CACHE_DIR, exist_ok=True)
+    csv_path = hf_hub_download(
+        repo_id=DATASET_REPO_ID,
+        filename=DATASET_FILENAME,
+        repo_type="dataset",
+        local_dir=CACHE_DIR,
+        token=_hf_token(),
+    )
+
+    chunks = pd.read_csv(
+        csv_path,
+        usecols=RAW_COLUMNS,
+        chunksize=CHUNK_SIZE,
+    )
+    df = pd.concat(chunks, ignore_index=True)
+    logger.info(f"Downloaded {len(df)} raw restaurant rows.")
+    return df
+
 def load_data() -> pd.DataFrame:
     """
     Load data from local cache if it exists, otherwise download from Hugging Face,
@@ -77,9 +123,7 @@ def load_data() -> pd.DataFrame:
 
     if df is None:
         try:
-            logger.info("Downloading dataset from Hugging Face...")
-            dataset = load_dataset("ManikaSaini/zomato-restaurant-recommendation", split='train')
-            df = dataset.to_pandas()
+            df = _download_raw_data()
         except Exception as e:
             # EC-1.1 HF Dataset unavailable
             logger.error(f"Failed to download dataset from Hugging Face: {e}")
@@ -90,20 +134,12 @@ def load_data() -> pd.DataFrame:
                  raise RuntimeError("Unable to load restaurant data. Please check your internet connection and try again.")
         
         # EC-1.3 Handle schema changes by mapping columns
-        col_mapping = {
-            'name': 'restaurant_name',
-            'location': 'location',
-            'cuisines': 'cuisines',
-            'approx_cost(for two people)': 'cost_for_two',
-            'rate': 'rating'
-        }
-        
         # Rename columns that exist
-        rename_dict = {old: new for old, new in col_mapping.items() if old in df.columns}
+        rename_dict = {old: new for old, new in COLUMN_MAPPING.items() if old in df.columns}
         df.rename(columns=rename_dict, inplace=True)
         
         # Ensure all expected columns are present
-        missing_cols = set(col_mapping.values()) - set(df.columns)
+        missing_cols = set(COLUMN_MAPPING.values()) - set(df.columns)
         if missing_cols:
              raise ValueError(f"Required columns missing from dataset: {missing_cols}")
 

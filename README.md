@@ -34,7 +34,7 @@ An AI-powered restaurant recommendation system for Bangalore. Set your location,
 |---|---|
 | Back-end API | FastAPI + Uvicorn (Python 3.10+) |
 | Front-end | Next.js 14 (App Router, TypeScript, Tailwind CSS) |
-| Data | Pandas + Hugging Face `datasets` |
+| Data | Pandas + Hugging Face Hub CSV download |
 | LLM | Groq API — `llama-3.3-70b-versatile` |
 | Back-end deploy | Railway |
 | Front-end deploy | Vercel |
@@ -206,6 +206,7 @@ Zomato_Project_1/
 4. In Railway's **Variables** tab, import the suggested variables from `.env.example` or add them manually:
    - `GROQ_API_KEY` — your Groq API key
    - `FRONTEND_ORIGIN` — your Vercel deployment URL (set after front-end deploy)
+   - `HF_TOKEN` — optional, but recommended to improve Hugging Face download limits
 5. Deploy. Note the public Railway URL (e.g. `https://your-app.up.railway.app`).
 
 ### Front-End → Vercel
@@ -221,7 +222,7 @@ Zomato_Project_1/
 
 ```bash
 curl https://your-app.up.railway.app/api/health
-# Expected: {"status":"ok","restaurants_loaded":7000}
+# Expected: {"status":"ok","data_status":"loading"|"ready","restaurants_loaded":...}
 ```
 
 ---

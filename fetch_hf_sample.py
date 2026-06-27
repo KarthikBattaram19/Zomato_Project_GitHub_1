@@ -1,23 +1,25 @@
 import argparse
-from datasets import load_dataset
 import pandas as pd
 import subprocess
+from huggingface_hub import hf_hub_download
 
 def main():
-    parser = argparse.ArgumentParser(description="Fetch top 5 rows from HuggingFace and display using read_parquet.py")
-    parser.add_argument("--dataset", type=str, default="dair-ai/emotion", help="Hugging Face dataset name (default: dair-ai/emotion)")
-    parser.add_argument("--split", type=str, default="train", help="Dataset split (default: train)")
+    parser = argparse.ArgumentParser(description="Fetch top 5 rows from a Hugging Face dataset CSV.")
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="ManikaSaini/zomato-restaurant-recommendation",
+        help="Hugging Face dataset repo id",
+    )
+    parser.add_argument("--filename", type=str, default="zomato.csv", help="CSV filename in the dataset repo")
     parser.add_argument("--output", type=str, default="hf_sample.parquet", help="Output parquet file (default: hf_sample.parquet)")
     
     args = parser.parse_args()
     
-    print(f"Loading top 5 rows from Hugging Face dataset '{args.dataset}' (split: {args.split})...")
+    print(f"Loading top 5 rows from Hugging Face dataset '{args.dataset}/{args.filename}'...")
     try:
-        # We use streaming=True so we don't download the entire dataset just for 5 rows
-        dataset = load_dataset(args.dataset, split=args.split, streaming=True, trust_remote_code=True)
-        top_5_rows = list(dataset.take(5))
-        
-        df = pd.DataFrame(top_5_rows)
+        csv_path = hf_hub_download(repo_id=args.dataset, filename=args.filename, repo_type="dataset")
+        df = pd.read_csv(csv_path, nrows=5)
         
         print(f"Saving to {args.output}...")
         df.to_parquet(args.output, engine='pyarrow')

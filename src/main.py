@@ -12,6 +12,7 @@ Endpoints:
 
 import logging
 import os
+import threading
 from contextlib import asynccontextmanager
 from typing import Any
 
@@ -39,17 +40,62 @@ logger = logging.getLogger(__name__)
 _df: pd.DataFrame = pd.DataFrame()
 _locations: list[str] = []
 _cuisines: list[str] = []
+_data_status = "not_loaded"
+_data_error: str | None = None
+_data_lock = threading.Lock()
+
+
+def _load_dataset_once() -> None:
+    """Load and cache restaurant data without blocking server startup."""
+    global _df, _locations, _cuisines, _data_status, _data_error
+
+    if _data_status == "ready":
+        return
+
+    with _data_lock:
+        if _data_status == "ready":
+            return
+
+        _data_status = "loading"
+        _data_error = None
+        try:
+            logger.info("Loading restaurant dataset...")
+            df = load_data()
+            _df = df
+            _locations = get_unique_locations(_df)
+            _cuisines = get_unique_cuisines(_df)
+            _data_status = "ready"
+            logger.info(
+                f"Dataset ready — {len(_df)} restaurants, {len(_locations)} locations, {len(_cuisines)} cuisines."
+            )
+        except Exception as exc:
+            _data_status = "error"
+            _data_error = str(exc)
+            logger.exception("Failed to load restaurant dataset.")
+
+
+def _start_background_data_load() -> None:
+    if os.getenv("PRELOAD_DATA_ON_STARTUP", "true").lower() in {"0", "false", "no"}:
+        logger.info("Skipping background dataset preload.")
+        return
+
+    thread = threading.Thread(target=_load_dataset_once, name="dataset-loader", daemon=True)
+    thread.start()
+
+
+def _ensure_data_ready() -> None:
+    _load_dataset_once()
+    if _data_status != "ready":
+        detail = "Restaurant dataset is not ready yet."
+        if _data_error:
+            detail = f"{detail} Last error: {_data_error}"
+        raise HTTPException(status_code=503, detail=detail)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load and cache the dataset once when the server starts."""
-    global _df, _locations, _cuisines
-    logger.info("Loading restaurant dataset...")
-    _df = load_data()
-    _locations = get_unique_locations(_df)
-    _cuisines = get_unique_cuisines(_df)
-    logger.info(f"Dataset ready — {len(_df)} restaurants, {len(_locations)} locations, {len(_cuisines)} cuisines.")
+    """Start quickly for Railway health checks, then warm the dataset cache."""
+    _start_background_data_load()
     yield
     logger.info("Shutting down.")
 
@@ -121,7 +167,12 @@ class RecommendResponse(BaseModel):
 @app.get("/api/health", tags=["Meta"])
 def health() -> dict[str, Any]:
     """Lightweight readiness probe for Railway."""
-    return {"status": "ok", "restaurants_loaded": len(_df)}
+    return {
+        "status": "ok",
+        "data_status": _data_status,
+        "restaurants_loaded": len(_df),
+        "data_error": _data_error,
+    }
 
 
 # ---------------------------------------------------------------------------
@@ -131,6 +182,7 @@ def health() -> dict[str, Any]:
 @app.get("/api/options", tags=["Meta"])
 def options() -> dict[str, list[str]]:
     """Return unique locations and cuisines to populate front-end dropdowns."""
+    _ensure_data_ready()
     return {"locations": _locations, "cuisines": _cuisines}
 
 
@@ -149,6 +201,8 @@ def recommend(req: RecommendRequest) -> RecommendResponse:
       missing_key  — GROQ_API_KEY not configured
       llm_error    — LLM call failed or returned unparseable output
     """
+    _ensure_data_ready()
+
     # 5A.6 — API key guard before doing any work
     if not os.getenv("GROQ_API_KEY"):
         logger.warning("GROQ_API_KEY is not set.")

@@ -41,7 +41,7 @@ gantt
 | # | Task | File(s) | Details |
 |---|------|---------|---------|
 | 1.1 | Create back-end directory structure | `src/`, `data/`, `Docs/` | Python pipeline + FastAPI API; match the layout in [architecture_1.md §3.1](file:///c:/Zomato_Project_1/Docs/architecture_1.md) |
-| 1.2 | Initialize back-end `requirements.txt` | `requirements.txt` | `fastapi>=0.110.0`, `uvicorn[standard]>=0.29.0`, `pandas>=2.0.0`, `datasets>=2.14.0`, `groq>=0.4.0`, `python-dotenv>=1.0.0`, `pydantic>=2.0.0` |
+| 1.2 | Initialize back-end `requirements.txt` | `requirements.txt` | `fastapi>=0.110.0`, `uvicorn[standard]>=0.29.0`, `pandas>=2.0.0`, `huggingface_hub>=0.23.0`, `groq>=0.4.0`, `python-dotenv>=1.0.0`, `pydantic>=2.0.0` |
 | 1.3 | Scaffold front-end app | `frontend/` | Create a Next.js (App Router, TypeScript) app: `npx create-next-app@latest frontend` |
 | 1.4 | Create back-end `.env` template | `.env` | `GROQ_API_KEY=your_api_key_here`, `FRONTEND_ORIGIN=http://localhost:3000` |
 | 1.5 | Create front-end `.env` template | `frontend/.env.example` | `NEXT_PUBLIC_API_URL=http://localhost:8000`; copy to ignored `.env.local` for local development |
@@ -59,7 +59,7 @@ gantt
 ### Verification
 ```bash
 # Back-end imports should succeed with no errors
-python -c "import fastapi; import uvicorn; import pandas; import datasets; import groq; import dotenv; print('✅ Back-end dependencies installed')"
+python -c "import fastapi; import uvicorn; import pandas; import huggingface_hub; import groq; import dotenv; print('✅ Back-end dependencies installed')"
 
 # Front-end toolchain is ready
 cd frontend && npm run build --dry-run 2>/dev/null || echo "✅ Next.js app scaffolded"
@@ -78,7 +78,7 @@ cd frontend && npm run build --dry-run 2>/dev/null || echo "✅ Next.js app scaf
 
 | # | Task | File(s) | Details |
 |---|------|---------|---------|
-| 2.1 | Implement dataset download | `src/data_loader.py` | Use `datasets.load_dataset("ManikaSaini/zomato-restaurant-recommendation")` |
+| 2.1 | Implement dataset download | `src/data_loader.py` | Use Hugging Face Hub to download `zomato.csv`, then read only required columns with Pandas |
 | 2.2 | Implement local caching | `src/data_loader.py` | Save to `data/zomato_cached.csv` after first download; load from cache on subsequent runs |
 | 2.3 | Implement preprocessing pipeline | `src/data_loader.py` | Drop nulls, normalize column names to lowercase/snake_case, cast types (`cost_for_two` → float, `rating` → float) |
 | 2.4 | Implement budget tier mapping | `src/utils.py` | `assign_budget_tier(cost)`: ≤500 → "low", ≤1500 → "medium", >1500 → "high" |

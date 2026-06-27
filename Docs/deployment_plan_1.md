@@ -80,6 +80,12 @@ Confirm the following before touching any cloud dashboard. These are the assumpt
 # Copy to .env locally, or import these names in Railway and fill real values there.
 GROQ_API_KEY=your_groq_api_key_here
 FRONTEND_ORIGIN=http://localhost:3000
+
+# Optional: improves Hugging Face download limits during Railway cold starts.
+HF_TOKEN=your_hugging_face_token_here
+
+# Optional: set false only if you want the first /api/options request to trigger loading.
+PRELOAD_DATA_ON_STARTUP=true
 ```
 
 ### `frontend/.env.example` template
@@ -94,11 +100,11 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 ```bash
 # Back-end: dependencies import cleanly
-python -c "import fastapi, uvicorn, pandas, datasets, groq, dotenv; print('OK')"
+python -c "import fastapi, uvicorn, pandas, huggingface_hub, groq, dotenv; print('OK')"
 
 # Back-end: API boots and serves health
 python -m uvicorn src.main:app --port 8000 &
-curl http://localhost:8000/api/health   # -> {"status":"ok","restaurants_loaded":...}
+curl http://localhost:8000/api/health   # -> {"status":"ok","data_status":"loading"|"ready",...}
 
 # Front-end: production build succeeds
 cd frontend && npm install && npm run build
@@ -209,17 +215,17 @@ git log --oneline -5          # latest commit includes deploy config
 | D3.3 | Confirm the start command source | Railway deploy logs/settings | Railpack should read `railpack.json`; fallback is `Procfile` |
 | D3.4 | Add/import `GROQ_API_KEY` variable | Railway → Variables | Use suggestions from `.env.example`, then replace placeholder with your real Groq key — **set here, never in a file** |
 | D3.5 | Add/import `FRONTEND_ORIGIN` variable | Railway → Variables | Use suggestions from `.env.example`; temporarily `http://localhost:3000`, then update in Phase D5 |
-| D3.6 | Set the health check path | Railway → Settings | `/api/health` with a generous timeout (dataset loads at startup) |
+| D3.6 | Set the health check path | Railway → Settings | `/api/health`; this returns quickly even while the dataset is warming in the background |
 | D3.7 | Deploy and capture the public URL | Railway → Settings → Networking | Generate a public domain, e.g. `https://<app>.up.railway.app` |
 
-> ⏱️ **First-boot latency:** `load_data()` downloads the Hugging Face dataset on first run, then caches to `data/zomato_cached.csv`. Railway's filesystem is ephemeral, so the **download happens on every cold start**. Set a health-check timeout of ~300s so the first deploy isn't killed mid-download.
+> ⏱️ **First-boot latency:** `load_data()` downloads the Hugging Face dataset on first run, then caches to `data/zomato_cached.csv`. Railway's filesystem is ephemeral, so the **download happens on every cold start** unless you attach a volume. The API now starts first and warms the dataset in the background so Railway health checks do not restart the service mid-download. Add `HF_TOKEN` to Railway variables if Hugging Face rate limits slow down cold starts.
 
 ### Verification
 
 ```bash
 # Replace with your real Railway domain
 curl https://<app>.up.railway.app/api/health
-# -> {"status":"ok","restaurants_loaded":<n>}
+# -> {"status":"ok","data_status":"loading"|"ready","restaurants_loaded":<n>}
 
 curl https://<app>.up.railway.app/api/options
 # -> {"locations":[...],"cuisines":[...]}
@@ -227,7 +233,7 @@ curl https://<app>.up.railway.app/api/options
 
 ### Deliverables
 - [ ] Back-end is live on Railway with a public HTTPS URL
-- [ ] `/api/health` returns `ok` with a non-zero `restaurants_loaded`
+- [ ] `/api/health` returns `ok`; `data_status` eventually becomes `ready` with a non-zero `restaurants_loaded`
 - [ ] `GROQ_API_KEY` is configured in Railway variables
 
 ---
@@ -355,6 +361,8 @@ curl -X POST https://<app>.up.railway.app/api/recommend \
 |---|---|---|---|---|
 | `GROQ_API_KEY` | Back-end (Railway) | in `.env` | Railway dashboard var | Server-side secret — never exposed to the browser |
 | `FRONTEND_ORIGIN` | Back-end (Railway) | `http://localhost:3000` | the Vercel domain | Drives CORS allow-list |
+| `HF_TOKEN` | Back-end (Railway) | optional | Railway dashboard var | Optional Hugging Face token for better download limits during cold starts |
+| `PRELOAD_DATA_ON_STARTUP` | Back-end (Railway) | `true` | `true` | Starts dataset loading in a background thread after the API starts |
 | `NEXT_PUBLIC_API_URL` | Front-end (Vercel) | `http://localhost:8000` | the Railway URL | Public, baked in at build → redeploy on change |
 
 ---
@@ -381,7 +389,8 @@ curl -X POST https://<app>.up.railway.app/api/recommend \
 | `No start command detected` | Railway/Railpack could not infer how to run FastAPI | Confirm `railpack.json` exists at repo root and contains `deploy.startCommand`; redeploy from latest GitHub commit |
 | `No GitHub artifact attestations found for python@3.11.9` | `mise` attestation verification fails for the pinned Python artifact | Confirm `mise.toml` exists with `python.github_attestations = false`; redeploy |
 | Railway Variables tab does not suggest app vars | No root env template detected, or Railway has not pulled the latest commit | Confirm `.env.example` exists at repo root, redeploy/import variables manually if needed |
-| Railway deploy times out on first boot | Dataset download exceeds health-check timeout | Raise `healthcheckTimeout` (~300s); optionally attach a volume at `data/` |
+| Railway deploy restarts while generating the Hugging Face train split | Dataset loading blocked FastAPI startup before health checks could pass | Ensure `src/main.py` uses background/lazy dataset loading and `/api/health` returns `data_status`; redeploy latest code |
+| `/api/options` is slow or briefly returns `503` after deploy | Dataset is still warming after Railway startup | Wait for `/api/health` to show `data_status:"ready"`; add `HF_TOKEN` or attach a Railway volume at `data/` to speed cold starts |
 | Front-end says it could not load options from API | Vercel build has no `NEXT_PUBLIC_API_URL`, or it was built with a stale localhost value | Delete any tracked `frontend/.env.local`, set `NEXT_PUBLIC_API_URL` in Vercel to the Railway URL, then redeploy the front-end |
 | Browser shows CORS error | `FRONTEND_ORIGIN` ≠ live Vercel domain (or trailing slash) | Fix the Railway var to the exact origin, redeploy |
 | UI loads but dropdowns empty / network error | `NEXT_PUBLIC_API_URL` wrong or not redeployed | Set correct Railway URL in Vercel, **redeploy** |

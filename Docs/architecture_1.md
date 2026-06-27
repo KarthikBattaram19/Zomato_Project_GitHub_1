@@ -47,7 +47,7 @@ flowchart TB
 | ---------------- | --------------------------- | ------------------------------------------------------ |
 | **Language**     | Python 3.10+                | Rich ML/AI ecosystem, rapid prototyping                |
 | **UI Framework** | Streamlit                   | Fast interactive UIs with minimal boilerplate           |
-| **Data Handling**| Pandas + Hugging Face `datasets` | Efficient tabular data ops + seamless HF integration |
+| **Data Handling**| Pandas + Hugging Face Hub CSV download | Efficient tabular data ops + direct access to the hosted dataset |
 | **LLM Provider** | Groq API (Llama 3)            | Ultra-fast inference, generous free tier, open-source models |
 | **Env Config**   | `python-dotenv`             | Secure API key management                              |
 | **Deployment**   | Streamlit Community Cloud / Docker | Zero-config hosting for Streamlit apps            |
@@ -105,7 +105,7 @@ graph LR
 
 | Aspect              | Detail                                                                 |
 | -------------------- | ---------------------------------------------------------------------- |
-| **Source**           | `datasets.load_dataset("ManikaSaini/zomato-restaurant-recommendation")` |
+| **Source**           | `hf_hub_download("ManikaSaini/zomato-restaurant-recommendation", "zomato.csv")` |
 | **Caching**          | Save to `data/zomato_cached.csv` after first download                  |
 | **Preprocessing**    | Drop nulls, normalize column names, cast types, map cost to budget tiers |
 | **Output**           | `pd.DataFrame` with standardized columns                               |
@@ -349,11 +349,13 @@ GROQ_API_KEY=your_api_key_here
 ### `requirements.txt`
 
 ```
-streamlit>=1.30.0
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
 pandas>=2.0.0
-datasets>=2.14.0
+huggingface_hub>=0.23.0
 groq>=0.4.0
 python-dotenv>=1.0.0
+pydantic>=2.0.0
 ```
 
 ---
