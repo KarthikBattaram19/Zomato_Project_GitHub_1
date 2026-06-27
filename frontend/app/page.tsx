@@ -59,7 +59,10 @@ export default function HomePage() {
         setLocations(data.locations)
         setCuisines(data.cuisines)
       })
-      .catch(() => setOptionsError('Could not connect to the back-end API.'))
+      .catch(error => {
+        const message = error instanceof Error ? error.message : 'Could not connect to the back-end API.'
+        setOptionsError(message)
+      })
   }, [])
 
   // 5B.5 — Submit preferences → call /api/recommend

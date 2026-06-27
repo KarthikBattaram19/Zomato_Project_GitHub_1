@@ -42,7 +42,10 @@ export default function PreferenceForm({
       {optionsError && (
         <div className="flex items-start gap-2 p-3 bg-error-container rounded-xl text-xs text-error">
           <span className="material-symbols-outlined text-[16px] flex-shrink-0 mt-0.5">warning</span>
-          <span>Couldn&apos;t load options from API. Is the back-end running on <code className="font-mono">:8000</code>?</span>
+          <span>
+            Couldn&apos;t load options from the API. {optionsError} In Vercel, set{' '}
+            <code className="font-mono">NEXT_PUBLIC_API_URL</code> to your Railway API URL and redeploy.
+          </span>
         </div>
       )}
 

@@ -67,10 +67,10 @@ Confirm the following before touching any cloud dashboard. These are the assumpt
 
 | # | Task | Command / File | Details |
 |---|------|----------------|---------|
-| D0.1 | Verify no secrets are tracked | `git ls-files .env .env.example frontend/.env.local` | Should show `.env.example`; `frontend/.env.local` is acceptable only while it contains the non-secret local API URL |
+| D0.1 | Verify no secrets are tracked | `git ls-files .env .env.example frontend/.env.local frontend/.env.example` | Should show `.env.example` and `frontend/.env.example`; must not show `.env` or `frontend/.env.local` |
 | D0.2 | Confirm build artifacts are ignored | `.gitignore` | Must ignore `.next/`, `node_modules/`, `data/`, `__pycache__/`, `.env` — already configured |
 | D0.3 | Confirm `.env.example` template exists | `.env.example` | Railway can suggest/import variable names from this file; it must contain placeholders only |
-| D0.4 | Confirm no front-end secrets are committed | `frontend/.env.local` | Currently contains only local `NEXT_PUBLIC_API_URL`; do not put secrets here because `NEXT_PUBLIC_*` is browser-visible |
+| D0.4 | Confirm front-end local env is ignored | `frontend/.env.local` | Local-only file copied from `frontend/.env.example`; must not be committed because Vercel should use dashboard env vars |
 | D0.5 | Run a clean local build of both services | see Verification | Catch build errors **before** the cloud does |
 
 ### `.env.example` template
@@ -80,6 +80,14 @@ Confirm the following before touching any cloud dashboard. These are the assumpt
 # Copy to .env locally, or import these names in Railway and fill real values there.
 GROQ_API_KEY=your_groq_api_key_here
 FRONTEND_ORIGIN=http://localhost:3000
+```
+
+### `frontend/.env.example` template
+
+```
+# Front-end environment variables.
+# Copy to .env.local for local development, and set the real Railway URL in Vercel.
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
 ### Verification
@@ -235,11 +243,11 @@ curl https://<app>.up.railway.app/api/options
 | D4.1 | Import the same GitHub repo into Vercel | Vercel dashboard → New Project | Same repository as Railway |
 | D4.2 | Set **Root Directory** = `frontend/` | Vercel → Project Settings | Critical — the Next.js app is not at repo root |
 | D4.3 | Confirm framework preset = Next.js | Vercel → Build Settings | `vercel.json` already pins build/install commands |
-| D4.4 | Add `NEXT_PUBLIC_API_URL` env var | Vercel → Environment Variables | Set to the Railway URL from D3.7 (no trailing slash) |
+| D4.4 | Add `NEXT_PUBLIC_API_URL` env var before build | Vercel → Environment Variables | Set to the Railway URL from D3.7 (no trailing slash); do not rely on `frontend/.env.local` |
 | D4.5 | Apply env var to all environments | Vercel → Env scope | Production (and Preview if used) |
 | D4.6 | Deploy and capture the Vercel URL | Vercel → Deployments | e.g. `https://<app>.vercel.app` |
 
-> ⚠️ `NEXT_PUBLIC_*` variables are **baked in at build time**. If you change `NEXT_PUBLIC_API_URL` later, you must **redeploy** for it to take effect.
+> ⚠️ `NEXT_PUBLIC_*` variables are **baked in at build time**. If `NEXT_PUBLIC_API_URL` is missing or changed later, you must **redeploy** for the browser bundle to use the Railway URL.
 
 ### Verification
 - [ ] Vercel build succeeds (check build logs)
@@ -374,6 +382,7 @@ curl -X POST https://<app>.up.railway.app/api/recommend \
 | `No GitHub artifact attestations found for python@3.11.9` | `mise` attestation verification fails for the pinned Python artifact | Confirm `mise.toml` exists with `python.github_attestations = false`; redeploy |
 | Railway Variables tab does not suggest app vars | No root env template detected, or Railway has not pulled the latest commit | Confirm `.env.example` exists at repo root, redeploy/import variables manually if needed |
 | Railway deploy times out on first boot | Dataset download exceeds health-check timeout | Raise `healthcheckTimeout` (~300s); optionally attach a volume at `data/` |
+| Front-end says it could not load options from API | Vercel build has no `NEXT_PUBLIC_API_URL`, or it was built with a stale localhost value | Delete any tracked `frontend/.env.local`, set `NEXT_PUBLIC_API_URL` in Vercel to the Railway URL, then redeploy the front-end |
 | Browser shows CORS error | `FRONTEND_ORIGIN` ≠ live Vercel domain (or trailing slash) | Fix the Railway var to the exact origin, redeploy |
 | UI loads but dropdowns empty / network error | `NEXT_PUBLIC_API_URL` wrong or not redeployed | Set correct Railway URL in Vercel, **redeploy** |
 | `missing_key` on every request | `GROQ_API_KEY` not set on Railway | Add the variable, redeploy |

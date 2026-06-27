@@ -44,7 +44,7 @@ gantt
 | 1.2 | Initialize back-end `requirements.txt` | `requirements.txt` | `fastapi>=0.110.0`, `uvicorn[standard]>=0.29.0`, `pandas>=2.0.0`, `datasets>=2.14.0`, `groq>=0.4.0`, `python-dotenv>=1.0.0`, `pydantic>=2.0.0` |
 | 1.3 | Scaffold front-end app | `frontend/` | Create a Next.js (App Router, TypeScript) app: `npx create-next-app@latest frontend` |
 | 1.4 | Create back-end `.env` template | `.env` | `GROQ_API_KEY=your_api_key_here`, `FRONTEND_ORIGIN=http://localhost:3000` |
-| 1.5 | Create front-end `.env` template | `frontend/.env.local` | `NEXT_PUBLIC_API_URL=http://localhost:8000` |
+| 1.5 | Create front-end `.env` template | `frontend/.env.example` | `NEXT_PUBLIC_API_URL=http://localhost:8000`; copy to ignored `.env.local` for local development |
 | 1.6 | Configure `.gitignore` | `.gitignore` | Ignore `.env`, `*.env.local`, `data/`, `__pycache__/`, `*.pyc`, `frontend/node_modules/`, `frontend/.next/` |
 | 1.7 | Create placeholder back-end modules | `src/main.py`, `src/data_loader.py`, `src/filter_engine.py`, `src/prompt_builder.py`, `src/recommendation_engine.py`, `src/utils.py` | Empty files with module docstrings (`src/main.py` = FastAPI entry) |
 | 1.8 | Install dependencies | — | Back-end: `pip install -r requirements.txt`; front-end: `cd frontend && npm install` |
@@ -54,7 +54,7 @@ gantt
 - [ ] All directories and placeholder files exist (`src/` back-end, `frontend/` front-end)
 - [ ] `pip install -r requirements.txt` completes without errors
 - [ ] `cd frontend && npm install` completes without errors
-- [ ] `.env` and `frontend/.env.local` are created and git-ignored
+- [ ] `.env` and `frontend/.env.local` are local-only and git-ignored; `.env.example` templates are committed
 
 ### Verification
 ```bash

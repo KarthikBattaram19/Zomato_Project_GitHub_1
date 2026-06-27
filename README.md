@@ -97,8 +97,9 @@ The API is now live at `http://localhost:8000`. Interactive docs: `http://localh
 cd frontend
 npm install
 
-# 2. The env file is already configured for local development
-# frontend/.env.local contains: NEXT_PUBLIC_API_URL=http://localhost:8000
+# 2. Create the local front-end env file
+copy .env.example .env.local
+# .env.local contains: NEXT_PUBLIC_API_URL=http://localhost:8000
 
 # 3. Start the dev server
 npm run dev
@@ -183,7 +184,7 @@ Zomato_Project_1/
 │   ├── lib/
 │   │   ├── api.ts                    # Typed API client (getOptions, getRecommendations)
 │   │   └── types.ts                  # Shared TypeScript types
-│   ├── .env.local                    # NEXT_PUBLIC_API_URL (local dev)
+│   ├── .env.example                  # NEXT_PUBLIC_API_URL template
 │   └── vercel.json                   # Vercel build config
 ├── data/                             # Cached dataset CSV (git-ignored)
 ├── Docs/                             # Architecture and planning documents
@@ -211,9 +212,9 @@ Zomato_Project_1/
 
 1. Import the same repository into Vercel.
 2. Set the **Root Directory** to `frontend/`.
-3. Add environment variable:
+3. Add environment variable before deploying:
    - `NEXT_PUBLIC_API_URL` — the Railway URL from the step above
-4. Deploy.
+4. Deploy or redeploy the front-end so the value is baked into the Next.js build.
 5. Copy the Vercel URL back into Railway's `FRONTEND_ORIGIN` and redeploy the back-end to update CORS.
 
 ### Smoke test (deployed)
