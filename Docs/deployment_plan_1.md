@@ -50,10 +50,12 @@ Confirm the following before touching any cloud dashboard. These are the assumpt
 | 0.4 | A valid **Groq API key** is available | Get one free at [console.groq.com](https://console.groq.com) |
 | 0.5 | `.env` is **git-ignored** (no secrets committed) | `.gitignore` already lists `.env` |
 | 0.6 | A GitHub account + empty/target repo | Required by both Railway and Vercel |
-| 0.7 | Railway start command config exists | **Missing** — created in Phase D1 below |
-| 0.8 | Python version pin for Railway | **Missing** — created in Phase D1 below |
+| 0.7 | Railway start command config exists | Present: `railpack.json` + `Procfile` |
+| 0.8 | Python version pin for Railway | Present: `runtime.txt` |
+| 0.9 | Railway variable template exists | Present: `.env.example` |
+| 0.10 | Railway Python installer workaround exists | Present: `mise.toml` disables GitHub attestation checks for the pinned Python build |
 
-> ⚠️ **Secret hygiene:** the local `.env` currently contains a real `GROQ_API_KEY`. Never commit it. It is already ignored by git. In production the key is set in the **Railway dashboard**, not in any file.
+> ⚠️ **Secret hygiene:** never commit a real `GROQ_API_KEY`. Keep local secrets in ignored `.env`. In production the key is set in the **Railway dashboard**, not in any file.
 
 ---
 
@@ -65,17 +67,18 @@ Confirm the following before touching any cloud dashboard. These are the assumpt
 
 | # | Task | Command / File | Details |
 |---|------|----------------|---------|
-| D0.1 | Verify no secrets are tracked | `git ls-files \| findstr .env` | Should return **nothing** (only `.env.example` may appear) |
+| D0.1 | Verify no secrets are tracked | `git ls-files .env .env.example frontend/.env.local` | Should show `.env.example`; `frontend/.env.local` is acceptable only while it contains the non-secret local API URL |
 | D0.2 | Confirm build artifacts are ignored | `.gitignore` | Must ignore `.next/`, `node_modules/`, `data/`, `__pycache__/`, `.env` — already configured |
-| D0.3 | Restore `.env.example` template | `.env.example` | Git status shows it deleted; recreate it so collaborators know required vars (see template below) |
-| D0.4 | Confirm `frontend/.env.local` is ignored | `.gitignore` | `*.env.local` should not be committed (Vercel injects the prod value) |
+| D0.3 | Confirm `.env.example` template exists | `.env.example` | Railway can suggest/import variable names from this file; it must contain placeholders only |
+| D0.4 | Confirm no front-end secrets are committed | `frontend/.env.local` | Currently contains only local `NEXT_PUBLIC_API_URL`; do not put secrets here because `NEXT_PUBLIC_*` is browser-visible |
 | D0.5 | Run a clean local build of both services | see Verification | Catch build errors **before** the cloud does |
 
-### `.env.example` template (recreate)
+### `.env.example` template
 
 ```
-# Back-end environment variables (template — copy to .env, never commit .env)
-GROQ_API_KEY=your_api_key_here
+# Back-end environment variables for Railway/local development.
+# Copy to .env locally, or import these names in Railway and fill real values there.
+GROQ_API_KEY=your_groq_api_key_here
 FRONTEND_ORIGIN=http://localhost:3000
 ```
 
@@ -100,31 +103,27 @@ cd frontend && npm install && npm run build
 
 ---
 
-## Phase D1 — Add Back-End Deploy Configuration
+## Phase D1 — Confirm Back-End Deploy Configuration
 
-> **Goal:** Add the Railway-specific config files that the implementation plan (task 6.6) calls for but which do not yet exist in the repo.
+> **Goal:** Confirm the Railway-specific config files required for a successful Railpack deployment exist at the repository root.
 
 ### Tasks
 
 | # | Task | File | Details |
 |---|------|------|---------|
-| D1.1 | Create Railway start config | `railway.json` | Declares the build + start command so deploys are reproducible |
-| D1.2 | Add a `Procfile` (fallback) | `Procfile` | Some platforms/build-packs read this; harmless to include |
+| D1.1 | Provide Railpack start config | `railpack.json` | Declares the Uvicorn start command Railway/Railpack could not infer automatically |
+| D1.2 | Provide a `Procfile` fallback | `Procfile` | Railpack can also detect this Heroku-style web command |
 | D1.3 | Pin the Python runtime | `runtime.txt` | Pin to a known-good version (e.g. `python-3.11.9`) to avoid surprise upgrades |
 | D1.4 | Confirm start command binds `$PORT` | — | Railway injects `$PORT`; the app **must** bind `0.0.0.0:$PORT` |
+| D1.5 | Disable missing Python attestation check | `mise.toml` | Required because Railway's `mise` install can fail for `python@3.11.9` with missing GitHub artifact attestations |
 
-### `railway.json`
+### `railpack.json`
 
 ```json
 {
-  "$schema": "https://railway.app/railway.schema.json",
-  "build": { "builder": "NIXPACKS" },
+  "$schema": "https://schema.railpack.com",
   "deploy": {
-    "startCommand": "uvicorn src.main:app --host 0.0.0.0 --port $PORT",
-    "healthcheckPath": "/api/health",
-    "healthcheckTimeout": 300,
-    "restartPolicyType": "ON_FAILURE",
-    "restartPolicyMaxRetries": 3
+    "startCommand": "uvicorn src.main:app --host 0.0.0.0 --port $PORT"
   }
 }
 ```
@@ -141,16 +140,23 @@ web: uvicorn src.main:app --host 0.0.0.0 --port $PORT
 python-3.11.9
 ```
 
+### `mise.toml`
+
+```toml
+[settings]
+python.github_attestations = false
+```
+
 ### Deliverables
-- [ ] `railway.json`, `Procfile`, and `runtime.txt` exist at the repo root
+- [ ] `railpack.json`, `Procfile`, `runtime.txt`, `mise.toml`, `.env.example`, and `requirements.txt` exist at the repo root
 - [ ] Start command binds `0.0.0.0` and `$PORT` (not a hardcoded `8000`)
 
 ### Verification
 
 ```bash
 # Simulate the production start command locally (use a fixed PORT)
-set PORT=8080            # Windows (PowerShell: $env:PORT=8080)
-uvicorn src.main:app --host 0.0.0.0 --port %PORT%
+$env:PORT=8080
+uvicorn src.main:app --host 0.0.0.0 --port $env:PORT
 curl http://localhost:8080/api/health
 ```
 
@@ -164,7 +170,7 @@ curl http://localhost:8080/api/health
 
 | # | Task | Command | Details |
 |---|------|---------|---------|
-| D2.1 | Stage and commit deploy config | `git add railway.json Procfile runtime.txt .env.example` | Commit the Phase D1 files |
+| D2.1 | Stage and commit deploy config | `git add railpack.json Procfile runtime.txt mise.toml .env.example` | Commit the Phase D1 files |
 | D2.2 | Commit any pending app changes | `git commit -m "Add deploy config"` | Keep secrets out of the commit |
 | D2.3 | Create the GitHub remote | (GitHub UI or `gh repo create`) | Empty repo, no README to avoid conflicts |
 | D2.4 | Push `main` | `git push -u origin main` | Both Railway and Vercel deploy from `main` |
@@ -191,10 +197,10 @@ git log --oneline -5          # latest commit includes deploy config
 | # | Task | Where | Details |
 |---|------|-------|---------|
 | D3.1 | Create a Railway project from the GitHub repo | Railway dashboard | **Root = repository root** (the folder containing `src/`) |
-| D3.2 | Confirm builder detects Python | Railway → Settings | Nixpacks should auto-detect `requirements.txt` + `runtime.txt` |
-| D3.3 | Set the start command | Railway → Settings → Deploy | `uvicorn src.main:app --host 0.0.0.0 --port $PORT` (or rely on `railway.json`) |
-| D3.4 | Add `GROQ_API_KEY` variable | Railway → Variables | Your real Groq key — **set here, never in a file** |
-| D3.5 | Add `FRONTEND_ORIGIN` variable | Railway → Variables | Temporarily `http://localhost:3000`; updated in Phase D5 |
+| D3.2 | Confirm builder detects Python | Railway → Settings | Railpack should auto-detect `requirements.txt` + `runtime.txt` |
+| D3.3 | Confirm the start command source | Railway deploy logs/settings | Railpack should read `railpack.json`; fallback is `Procfile` |
+| D3.4 | Add/import `GROQ_API_KEY` variable | Railway → Variables | Use suggestions from `.env.example`, then replace placeholder with your real Groq key — **set here, never in a file** |
+| D3.5 | Add/import `FRONTEND_ORIGIN` variable | Railway → Variables | Use suggestions from `.env.example`; temporarily `http://localhost:3000`, then update in Phase D5 |
 | D3.6 | Set the health check path | Railway → Settings | `/api/health` with a generous timeout (dataset loads at startup) |
 | D3.7 | Deploy and capture the public URL | Railway → Settings → Networking | Generate a public domain, e.g. `https://<app>.up.railway.app` |
 
@@ -350,7 +356,7 @@ curl -X POST https://<app>.up.railway.app/api/recommend \
 | Phase | Name | Key Output | Blocks |
 |-------|------|------------|--------|
 | **D0** | Repo Hygiene & Pre-Flight | Clean, secret-free, buildable repo | everything |
-| **D1** | Back-End Deploy Config | `railway.json`, `Procfile`, `runtime.txt` | D3 |
+| **D1** | Back-End Deploy Config | `railpack.json`, `Procfile`, `runtime.txt`, `mise.toml` | D3 |
 | **D2** | Push to GitHub | `main` branch on GitHub | D3, D4 |
 | **D3** | Deploy Back-End (Railway) | Public API URL | D4 |
 | **D4** | Deploy Front-End (Vercel) | Public UI URL | D5 |
@@ -364,6 +370,9 @@ curl -X POST https://<app>.up.railway.app/api/recommend \
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
+| `No start command detected` | Railway/Railpack could not infer how to run FastAPI | Confirm `railpack.json` exists at repo root and contains `deploy.startCommand`; redeploy from latest GitHub commit |
+| `No GitHub artifact attestations found for python@3.11.9` | `mise` attestation verification fails for the pinned Python artifact | Confirm `mise.toml` exists with `python.github_attestations = false`; redeploy |
+| Railway Variables tab does not suggest app vars | No root env template detected, or Railway has not pulled the latest commit | Confirm `.env.example` exists at repo root, redeploy/import variables manually if needed |
 | Railway deploy times out on first boot | Dataset download exceeds health-check timeout | Raise `healthcheckTimeout` (~300s); optionally attach a volume at `data/` |
 | Browser shows CORS error | `FRONTEND_ORIGIN` ≠ live Vercel domain (or trailing slash) | Fix the Railway var to the exact origin, redeploy |
 | UI loads but dropdowns empty / network error | `NEXT_PUBLIC_API_URL` wrong or not redeployed | Set correct Railway URL in Vercel, **redeploy** |
