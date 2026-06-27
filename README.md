@@ -201,8 +201,8 @@ Zomato_Project_1/
 
 1. Push the repository to GitHub.
 2. Create a new Railway project from the repo (root = repository root).
-3. Set the **start command**: `uvicorn src.main:app --host 0.0.0.0 --port $PORT`
-4. Add environment variables in Railway:
+3. Railway reads the start command from `railpack.json`.
+4. In Railway's **Variables** tab, import the suggested variables from `.env.example` or add them manually:
    - `GROQ_API_KEY` — your Groq API key
    - `FRONTEND_ORIGIN` — your Vercel deployment URL (set after front-end deploy)
 5. Deploy. Note the public Railway URL (e.g. `https://your-app.up.railway.app`).
